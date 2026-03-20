@@ -312,14 +312,74 @@ app.put('/api/locations/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// DELETE /api/locations/:id
+// DELETE /api/locations/:id  (?cascade=true for cascade delete)
 app.delete('/api/locations/:id', async (req, res) => {
   try {
     const targetId = parseInt(req.params.id);
-    const rows     = await sheetGet(LOC_SHEET);
-    const idx      = rows.findIndex((r, i) => i > 0 && parseInt(r[1]) === targetId);
-    if (idx === -1) return res.status(404).json({ error: 'לא נמצא' });
-    await sheetDeleteRow(LOC_SHEET, idx);
+    const cascade  = req.query.cascade === 'true';
+
+    const [locRows, booksRows] = await Promise.all([sheetGet(LOC_SHEET), sheetGet(BOOKS_SHEET)]);
+    const locIdx = locRows.findIndex((r, i) => i > 0 && parseInt(r[1]) === targetId);
+    if (locIdx === -1) return res.status(404).json({ error: 'לא נמצא' });
+
+    if (!cascade) {
+      await sheetDeleteRow(LOC_SHEET, locIdx);
+      return res.json({ ok: true });
+    }
+
+    // ---- Cascade: collect all IDs to remove ----
+    const locs       = parseLocations(locRows);
+    const targetType = locRows[locIdx][0];
+
+    let shelfIds = [], rowIds = [], layerIds = [], bookIds = [];
+
+    if (targetType === 'ארון') {
+      shelfIds  = locs.shelves.filter(s => s.cabinetId === targetId).map(s => s.id);
+      rowIds    = locs.rows.filter(r => shelfIds.includes(r.shelfId)).map(r => r.id);
+      layerIds  = locs.layers.filter(l => rowIds.includes(l.rowId)).map(l => l.id);
+      bookIds   = parseBooks(booksRows)
+        .filter(b => b.cabinetId === targetId || shelfIds.includes(b.shelfId) ||
+                     rowIds.includes(b.rowId)  || layerIds.includes(b.layerId))
+        .map(b => b.id);
+    } else if (targetType === 'מדף') {
+      rowIds    = locs.rows.filter(r => r.shelfId === targetId).map(r => r.id);
+      layerIds  = locs.layers.filter(l => rowIds.includes(l.rowId)).map(l => l.id);
+      bookIds   = parseBooks(booksRows)
+        .filter(b => b.shelfId === targetId || rowIds.includes(b.rowId) || layerIds.includes(b.layerId))
+        .map(b => b.id);
+    } else if (targetType === 'טור') {
+      layerIds  = locs.layers.filter(l => l.rowId === targetId).map(l => l.id);
+      bookIds   = parseBooks(booksRows)
+        .filter(b => b.rowId === targetId || layerIds.includes(b.layerId))
+        .map(b => b.id);
+    } else if (targetType === 'שכבה') {
+      bookIds   = parseBooks(booksRows)
+        .filter(b => b.layerId === targetId)
+        .map(b => b.id);
+    }
+
+    // ---- Delete books (descending index so shifts don't affect remaining) ----
+    const bookSet          = new Set(bookIds);
+    const bookIdxToDelete  = booksRows
+      .map((r, i) => (i > 0 && bookSet.has(parseInt(r[0]))) ? i : -1)
+      .filter(i => i !== -1)
+      .sort((a, b) => b - a);
+
+    for (const idx of bookIdxToDelete) {
+      await sheetDeleteRow(BOOKS_SHEET, idx);
+    }
+
+    // ---- Delete locations (target + all children, descending) ----
+    const locIdSet        = new Set([targetId, ...shelfIds, ...rowIds, ...layerIds]);
+    const locIdxToDelete  = locRows
+      .map((r, i) => (i > 0 && locIdSet.has(parseInt(r[1]))) ? i : -1)
+      .filter(i => i !== -1)
+      .sort((a, b) => b - a);
+
+    for (const idx of locIdxToDelete) {
+      await sheetDeleteRow(LOC_SHEET, idx);
+    }
+
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

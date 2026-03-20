@@ -439,6 +439,12 @@ function renderBookRow(book) {
   </div>`;
 }
 
+function formatCascadeParts(parts) {
+  if (!parts.length) return '';
+  if (parts.length === 1) return parts[0];
+  return parts.slice(0, -1).join(', ') + ' ו-' + parts[parts.length - 1];
+}
+
 function esc(str) {
   return String(str)
     .replace(/&/g, '&amp;')
@@ -1728,12 +1734,31 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     if (btn.dataset.action === 'del-cabinet') {
-      const usedByShelf = db.locations.shelves.some(s => s.cabinetId === id);
-      const usedByBook  = db.books.some(b => b.cabinetId === id);
-      if (usedByShelf || usedByBook) { showToast('לא ניתן למחוק - יש מדפים או ספרים בארון זה', 'error'); return; }
+      const shelfIds  = db.locations.shelves.filter(s => s.cabinetId === id).map(s => s.id);
+      const rowIds    = db.locations.rows.filter(r => shelfIds.includes(r.shelfId)).map(r => r.id);
+      const layerIds  = db.locations.layers.filter(l => rowIds.includes(l.rowId)).map(l => l.id);
+      const bookCount = db.books.filter(b =>
+        b.cabinetId === id || shelfIds.includes(b.shelfId) ||
+        rowIds.includes(b.rowId) || layerIds.includes(b.layerId)
+      ).length;
+      const parts = [];
+      if (shelfIds.length)  parts.push(`${shelfIds.length} מדפים`);
+      if (rowIds.length)    parts.push(`${rowIds.length} טורים`);
+      if (layerIds.length)  parts.push(`${layerIds.length} שכבות`);
+      if (bookCount)        parts.push(`${bookCount} ספרים`);
+      const extra = parts.length ? ` תמחק גם ${formatCascadeParts(parts)}` : '';
+      if (!confirm(`מחיקת הארון${extra}. להמשיך?`)) return;
       showLoadingOverlay(true);
       try {
-        await apiFetch('DELETE', `/api/locations/${id}`);
+        await apiFetch('DELETE', `/api/locations/${id}?cascade=true`);
+        const bookSet = new Set(db.books.filter(b =>
+          b.cabinetId === id || shelfIds.includes(b.shelfId) ||
+          rowIds.includes(b.rowId) || layerIds.includes(b.layerId)
+        ).map(b => b.id));
+        db.books = db.books.filter(b => !bookSet.has(b.id));
+        db.locations.layers  = db.locations.layers.filter(l => !layerIds.includes(l.id));
+        db.locations.rows    = db.locations.rows.filter(r => !rowIds.includes(r.id));
+        db.locations.shelves = db.locations.shelves.filter(s => !shelfIds.includes(s.id));
         db.locations.cabinets = db.locations.cabinets.filter(c => c.id !== id);
         renderLocationsManager();
         render();
@@ -1757,26 +1782,57 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
+      let confirmMsg = '';
+      let rowIds = [], layerIds = [], bookSet = new Set();
+
       if (btn.dataset.action === 'del-shelf') {
-        const usedByRow  = db.locations.rows.some(r => r.shelfId === id);
-        const usedByBook = db.books.some(b => b.shelfId === id);
-        if (usedByRow || usedByBook) { showToast('לא ניתן למחוק - יש טורים או ספרים במדף זה', 'error'); return; }
+        rowIds    = db.locations.rows.filter(r => r.shelfId === id).map(r => r.id);
+        layerIds  = db.locations.layers.filter(l => rowIds.includes(l.rowId)).map(l => l.id);
+        const bookCount = db.books.filter(b =>
+          b.shelfId === id || rowIds.includes(b.rowId) || layerIds.includes(b.layerId)
+        ).length;
+        const parts = [];
+        if (rowIds.length)   parts.push(`${rowIds.length} טורים`);
+        if (layerIds.length) parts.push(`${layerIds.length} שכבות`);
+        if (bookCount)       parts.push(`${bookCount} ספרים`);
+        const extra = parts.length ? ` תמחק גם ${formatCascadeParts(parts)}` : '';
+        confirmMsg = `מחיקת המדף${extra}. להמשיך?`;
+        bookSet = new Set(db.books.filter(b =>
+          b.shelfId === id || rowIds.includes(b.rowId) || layerIds.includes(b.layerId)
+        ).map(b => b.id));
       } else if (btn.dataset.action === 'del-row') {
-        const usedByLayer = db.locations.layers.some(l => l.rowId === id);
-        const usedByBook  = db.books.some(b => b.rowId === id);
-        if (usedByLayer || usedByBook) { showToast('לא ניתן למחוק - יש שכבות או ספרים בטור זה', 'error'); return; }
+        layerIds  = db.locations.layers.filter(l => l.rowId === id).map(l => l.id);
+        const bookCount = db.books.filter(b =>
+          b.rowId === id || layerIds.includes(b.layerId)
+        ).length;
+        const parts = [];
+        if (layerIds.length) parts.push(`${layerIds.length} שכבות`);
+        if (bookCount)       parts.push(`${bookCount} ספרים`);
+        const extra = parts.length ? ` תמחק גם ${formatCascadeParts(parts)}` : '';
+        confirmMsg = `מחיקת הטור${extra}. להמשיך?`;
+        bookSet = new Set(db.books.filter(b =>
+          b.rowId === id || layerIds.includes(b.layerId)
+        ).map(b => b.id));
       } else if (btn.dataset.action === 'del-layer') {
-        const usedByBook = db.books.some(b => b.layerId === id);
-        if (usedByBook) { showToast('לא ניתן למחוק - יש ספרים בשכבה זו', 'error'); return; }
+        const bookCount = db.books.filter(b => b.layerId === id).length;
+        const extra = bookCount ? ` תמחק גם ${bookCount} ספרים` : '';
+        confirmMsg = `מחיקת השכבה${extra}. להמשיך?`;
+        bookSet = new Set(db.books.filter(b => b.layerId === id).map(b => b.id));
       }
+
+      if (!confirm(confirmMsg)) return;
 
       showLoadingOverlay(true);
       try {
-        await apiFetch('DELETE', `/api/locations/${id}`);
+        await apiFetch('DELETE', `/api/locations/${id}?cascade=true`);
+        db.books = db.books.filter(b => !bookSet.has(b.id));
         if (btn.dataset.action === 'del-shelf') {
+          db.locations.layers  = db.locations.layers.filter(l => !layerIds.includes(l.id));
+          db.locations.rows    = db.locations.rows.filter(r => !rowIds.includes(r.id));
           db.locations.shelves = db.locations.shelves.filter(s => s.id !== id);
         } else if (btn.dataset.action === 'del-row') {
-          db.locations.rows = db.locations.rows.filter(r => r.id !== id);
+          db.locations.layers = db.locations.layers.filter(l => !layerIds.includes(l.id));
+          db.locations.rows   = db.locations.rows.filter(r => r.id !== id);
         } else if (btn.dataset.action === 'del-layer') {
           db.locations.layers = db.locations.layers.filter(l => l.id !== id);
         }
