@@ -902,7 +902,7 @@ function renderLocationsManager() {
     if (savedLayerShelf) layerShelfSel.value = savedLayerShelf;
   }
 
-  const layerRowSel = document.getElementById('newLayerRow');
+  const layerRowSel = document.getElementById('newLayerRowMgr');
   const savedLayerRow = layerRowSel.value;
   const filterShelfForLayers = parseInt(layerShelfSel.value) || null;
   layerRowSel.innerHTML = '<option value="">-- בחר טור --</option>';
@@ -1575,7 +1575,7 @@ document.addEventListener('DOMContentLoaded', () => {
         .filter(s => s.cabinetId === cabinetId)
         .forEach(s => layerShelfSel.appendChild(new Option(s.name, s.id)));
     }
-    const layerRowSel = document.getElementById('newLayerRow');
+    const layerRowSel = document.getElementById('newLayerRowMgr');
     layerRowSel.innerHTML = '<option value="">-- בחר טור --</option>';
     layerRowSel.disabled = true;
     renderLayersList(null);
@@ -1583,7 +1583,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('newLayerShelf').addEventListener('change', () => {
     const shelfId = parseInt(document.getElementById('newLayerShelf').value) || null;
-    const layerRowSel = document.getElementById('newLayerRow');
+    const layerRowSel = document.getElementById('newLayerRowMgr');
     layerRowSel.innerHTML = '<option value="">-- בחר טור --</option>';
     layerRowSel.disabled = !shelfId;
     if (shelfId) {
@@ -1594,8 +1594,8 @@ document.addEventListener('DOMContentLoaded', () => {
     renderLayersList(null);
   });
 
-  document.getElementById('newLayerRow').addEventListener('change', () => {
-    const rowId = parseInt(document.getElementById('newLayerRow').value) || null;
+  document.getElementById('newLayerRowMgr').addEventListener('change', () => {
+    const rowId = parseInt(document.getElementById('newLayerRowMgr').value) || null;
     renderLayersList(rowId);
   });
 
@@ -1665,7 +1665,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Add layer (שכבה) from manager
   document.getElementById('addLayerBtn').addEventListener('click', async () => {
     const name  = document.getElementById('newLayerNameMgr').value.trim();
-    const rowId = parseInt(document.getElementById('newLayerRow').value);
+    const rowId = parseInt(document.getElementById('newLayerRowMgr').value);
     if (!name)  { showToast('הכנס שם לשכבה', 'error'); return; }
     if (!rowId) { showToast('בחר טור תחילה', 'error');  return; }
     showLoadingOverlay(true);
