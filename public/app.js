@@ -163,6 +163,17 @@ function countBooksFor(type, id) {
   return db.books.filter(b => b[type + 'Id'] === id).length;
 }
 
+function clearAllFiltersAndSearch() {
+  state.search = '';
+  document.getElementById('searchInput').value = '';
+  document.getElementById('searchClear').classList.remove('visible');
+  state.filter = { cabinetId: null, shelfId: null, rowId: null, layerId: null, owner: null };
+  state.seriesFilter  = null;
+  state.authorFilter  = null;
+  state.loanedOnly    = false;
+  state.duplicatesOnly = false;
+}
+
 // ============================================================
 // RENDERING
 // ============================================================
@@ -1714,12 +1725,22 @@ document.addEventListener('DOMContentLoaded', () => {
     if (el.dataset.action === 'delete')        openDeleteModal(parseInt(el.dataset.id));
     if (el.dataset.action === 'filter-series') {
       const series = el.dataset.series;
-      state.seriesFilter = state.seriesFilter === series ? null : series;
+      if (state.seriesFilter === series) {
+        state.seriesFilter = null;
+      } else {
+        clearAllFiltersAndSearch();
+        state.seriesFilter = series;
+      }
       render();
     }
     if (el.dataset.action === 'filter-author') {
       const author = el.dataset.author;
-      state.authorFilter = state.authorFilter === author ? null : author;
+      if (state.authorFilter === author) {
+        state.authorFilter = null;
+      } else {
+        clearAllFiltersAndSearch();
+        state.authorFilter = author;
+      }
       render();
     }
   });
@@ -1755,11 +1776,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!el) return;
     if (el.dataset.action === 'filter-series') {
       closeModal('bookDetailModal');
+      clearAllFiltersAndSearch();
       state.seriesFilter = el.dataset.series;
       render();
     }
     if (el.dataset.action === 'filter-author') {
       closeModal('bookDetailModal');
+      clearAllFiltersAndSearch();
       state.authorFilter = el.dataset.author;
       render();
     }
