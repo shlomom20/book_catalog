@@ -303,7 +303,7 @@ function renderLocationTree() {
   }
 
   {
-    const dupCount = getDuplicateGroups().reduce((s, g) => s + g.length, 0);
+    const dupCount = getDuplicateGroups().length;
     const loanedRow = db.loans.length > 0
       ? `<div class="tree-all ${state.loanedOnly ? 'active' : ''}" data-action="filter-loaned">
           📤 ספרים מושאלים
