@@ -218,21 +218,21 @@
             <input type="hidden" id="bookId">
             <div class="form-row">
               <div class="form-group">
-                <label for="bookName">שם הספר <span class="required">*</span></label>
+                <label for="bookName"><span>שם הספר <span class="required">*</span></span><button type="button" class="field-lock-btn" data-field="name" title="נעל שדה">🔓</button></label>
                 <input type="text" id="bookName" placeholder="הכנס שם ספר">
                 <span class="field-error" id="bookNameError"></span>
               </div>
               <div class="form-group">
-                <label for="bookAuthor">שם הסופר <span class="required">*</span></label>
+                <label for="bookAuthor"><span>שם הסופר <span class="required">*</span></span><button type="button" class="field-lock-btn" data-field="author" title="נעל שדה">🔓</button></label>
                 <input type="text" id="bookAuthor" placeholder="הכנס שם סופר">
                 <span class="field-error" id="bookAuthorError"></span>
               </div>
               <div class="form-group">
-                <label for="bookSeries">סדרה</label>
+                <label for="bookSeries"><span>סדרה</span><button type="button" class="field-lock-btn" data-field="series" title="נעל שדה">🔓</button></label>
                 <input type="text" id="bookSeries" placeholder="שם הסדרה (אופציונלי)">
               </div>
               <div class="form-group form-group-narrow">
-                <label for="bookSeriesNumber"># בסדרה</label>
+                <label for="bookSeriesNumber"><span># בסדרה</span><button type="button" class="field-lock-btn" data-field="seriesNumber" title="נעל שדה">🔓</button></label>
                 <input type="number" id="bookSeriesNumber" placeholder="מס'" min="1">
               </div>
             </div>
@@ -241,7 +241,7 @@
 
             <div class="form-row location-row">
               <div class="form-group">
-                <label for="cabinetSelect">ארון</label>
+                <label for="cabinetSelect"><span>ארון</span><button type="button" class="field-lock-btn" data-field="cabinet" title="נעל שדה">🔓</button></label>
                 <select id="cabinetSelect"><option value="">-- בחר ארון --</option></select>
                 <div class="new-item-row" id="newCabinetRow">
                   <input type="text" id="newCabinetName" placeholder="שם הארון החדש">
@@ -250,7 +250,7 @@
                 </div>
               </div>
               <div class="form-group">
-                <label for="shelfSelect">מדף</label>
+                <label for="shelfSelect"><span>מדף</span><button type="button" class="field-lock-btn" data-field="shelf" title="נעל שדה">🔓</button></label>
                 <select id="shelfSelect" disabled><option value="">-- בחר מדף --</option></select>
                 <div class="new-item-row" id="newShelfRow">
                   <input type="text" id="newShelfName" placeholder="שם המדף החדש">
@@ -259,7 +259,7 @@
                 </div>
               </div>
               <div class="form-group">
-                <label for="rowSelect">טור</label>
+                <label for="rowSelect"><span>טור</span><button type="button" class="field-lock-btn" data-field="row" title="נעל שדה">🔓</button></label>
                 <select id="rowSelect" disabled><option value="">-- בחר טור --</option></select>
                 <div class="new-item-row" id="newRowRow">
                   <input type="text" id="newRowName" placeholder="שם הטור החדש">
@@ -268,7 +268,7 @@
                 </div>
               </div>
               <div class="form-group">
-                <label for="layerSelect">שכבה</label>
+                <label for="layerSelect"><span>שכבה</span><button type="button" class="field-lock-btn" data-field="layer" title="נעל שדה">🔓</button></label>
                 <select id="layerSelect" disabled><option value="">-- בחר שכבה --</option></select>
                 <div class="new-item-row" id="newLayerRow">
                   <input type="text" id="newLayerName" placeholder="שם השכבה החדשה">
@@ -279,7 +279,7 @@
             </div>
             <div class="form-row">
               <div class="form-group">
-                <label for="bookNotes">הערות</label>
+                <label for="bookNotes"><span>הערות</span><button type="button" class="field-lock-btn" data-field="notes" title="נעל שדה">🔓</button></label>
                 <textarea id="bookNotes" placeholder="הערות על הספר (אופציונלי)" rows="3" style="resize:vertical;font-size:1rem;padding:12px 14px;border:1.5px solid var(--color-border);border-radius:var(--r-sm);width:100%;outline:none;font-family:inherit;transition:var(--t);-webkit-appearance:none;"></textarea>
               </div>
             </div>

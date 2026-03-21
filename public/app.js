@@ -34,6 +34,21 @@ const SORT_LABELS = {
 let db = { books: [], locations: { cabinets: [], shelves: [], rows: [], layers: [] }, loans: [], wishlist: [] };
 let loanSelectedBookId = null;
 
+// ---- Field Locks (persist values between "שמור והוסף עוד" clicks) ----
+const fieldLocks = { name: false, author: false, series: false, seriesNumber: false, notes: false, cabinet: false, shelf: false, row: false, layer: false };
+
+function setFieldLock(field, locked) {
+  fieldLocks[field] = locked;
+  document.querySelectorAll(`.field-lock-btn[data-field="${field}"]`).forEach(btn => {
+    btn.textContent = locked ? '🔒' : '🔓';
+    btn.classList.toggle('locked', locked);
+  });
+}
+
+function resetAllFieldLocks() {
+  Object.keys(fieldLocks).forEach(f => setFieldLock(f, false));
+}
+
 async function apiFetch(method, path, body) {
   const opts = { method, headers: { 'Content-Type': 'application/json' } };
   if (body !== undefined) opts.body = JSON.stringify(body);
@@ -652,6 +667,7 @@ function switchBookModalTab(tab) {
 
 function openAddBookModal() {
   state.editingBookId = null;
+  resetAllFieldLocks();
   document.getElementById('bookModalTitle').textContent = 'הוסף ספר חדש';
   document.getElementById('bookModalSave').textContent  = '💾 שמור ספר';
   document.getElementById('bookModalSave').style.display = '';
@@ -894,15 +910,12 @@ async function saveBookAndContinue() {
     showToast(`"${name}" נוסף ✓`, 'success');
     render();
 
-    // Keep modal open, keep location, clear only name/author
-    const savedCabinetId = bookData.cabinetId;
-    const savedShelfId   = bookData.shelfId;
-    const savedRowId     = bookData.rowId;
-    const savedLayerId   = bookData.layerId;
-
-    document.getElementById('bookName').value   = '';
-    document.getElementById('bookAuthor').value = '';
-    document.getElementById('bookNotes').value  = '';
+    // Restore locked fields, clear unlocked ones
+    document.getElementById('bookName').value         = fieldLocks.name         ? name         : '';
+    document.getElementById('bookAuthor').value       = fieldLocks.author       ? author        : '';
+    document.getElementById('bookSeries').value       = fieldLocks.series       ? bookData.series       : '';
+    document.getElementById('bookSeriesNumber').value = fieldLocks.seriesNumber ? bookData.seriesNumber : '';
+    document.getElementById('bookNotes').value        = fieldLocks.notes        ? bookData.notes        : '';
     document.getElementById('bookNameError').textContent   = '';
     document.getElementById('bookAuthorError').textContent = '';
     hideNewRow('newCabinetRow');
@@ -910,12 +923,17 @@ async function saveBookAndContinue() {
     hideNewRow('newRowRow');
     hideNewRow('newLayerRow');
 
-    populateCabinetSelect(savedCabinetId);
-    if (savedCabinetId) {
-      populateShelfSelect(savedCabinetId, savedShelfId);
-      if (savedShelfId) {
-        populateRowSelect(savedShelfId, savedRowId);
-        if (savedRowId) populateLayerSelect(savedRowId, savedLayerId);
+    const keepCabinet = fieldLocks.cabinet ? bookData.cabinetId : null;
+    const keepShelf   = fieldLocks.shelf   ? bookData.shelfId   : null;
+    const keepRow     = fieldLocks.row     ? bookData.rowId     : null;
+    const keepLayer   = fieldLocks.layer   ? bookData.layerId   : null;
+
+    populateCabinetSelect(keepCabinet);
+    if (keepCabinet) {
+      populateShelfSelect(keepCabinet, keepShelf);
+      if (keepShelf) {
+        populateRowSelect(keepShelf, keepRow);
+        if (keepRow) populateLayerSelect(keepRow, keepLayer);
         else populateLayerSelect(null, null);
       } else {
         populateRowSelect(null, null);
@@ -1860,6 +1878,14 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('bookModalCancel').addEventListener('click', () => { state.fromWishlistId = null; closeModal('bookModal'); });
   document.getElementById('bookModalSave').addEventListener('click', saveBook);
   document.getElementById('bookModalSaveAndAdd').addEventListener('click', saveBookAndContinue);
+
+  // ---- Field lock buttons ----
+  document.getElementById('bookForm').addEventListener('click', e => {
+    const btn = e.target.closest('.field-lock-btn');
+    if (!btn) return;
+    const field = btn.dataset.field;
+    setFieldLock(field, !fieldLocks[field]);
+  });
 
   // Cabinet select change
   document.getElementById('cabinetSelect').addEventListener('change', e => {

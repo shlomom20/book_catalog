@@ -961,7 +961,25 @@ button, select, input[type="text"] { touch-action: manipulation; }
 
 .form-group { display:flex; flex-direction:column; gap:6px; }
 
-.form-group label { font-size:.88rem; font-weight:600; color:var(--color-text-lt); }
+.form-group label {
+  font-size:.88rem; font-weight:600; color:var(--color-text-lt);
+  display: flex; align-items: center; justify-content: space-between;
+}
+
+.field-lock-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: .85rem;
+  padding: 2px 4px;
+  border-radius: 4px;
+  opacity: .35;
+  transition: opacity var(--t), transform var(--t);
+  line-height: 1;
+  flex-shrink: 0;
+}
+.field-lock-btn:hover { opacity: .7; }
+.field-lock-btn.locked { opacity: 1; transform: scale(1.1); }
 
 .form-group input[type="text"],
 .form-group input[type="number"],
