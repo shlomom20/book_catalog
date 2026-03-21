@@ -625,6 +625,8 @@ function setAuthors(value) {
 function createExtraAuthorRow(value) {
   const row = document.createElement('div');
   row.className = 'author-field-row';
+  const wrap = document.createElement('div');
+  wrap.className = 'author-input-wrap';
   const input = document.createElement('input');
   input.type = 'text';
   input.className = 'author-input';
@@ -632,12 +634,13 @@ function createExtraAuthorRow(value) {
   input.value = value || '';
   const btn = document.createElement('button');
   btn.type = 'button';
-  btn.className = 'btn-remove-author';
+  btn.className = 'btn-remove-author-inline';
   btn.title = 'הסר';
   btn.textContent = '✕';
   btn.addEventListener('click', () => row.remove());
-  row.appendChild(input);
-  row.appendChild(btn);
+  wrap.appendChild(input);
+  wrap.appendChild(btn);
+  row.appendChild(wrap);
   return row;
 }
 
