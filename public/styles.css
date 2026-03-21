@@ -742,7 +742,7 @@ button, select, input[type="text"] { touch-action: manipulation; }
   color: var(--color-primary);
   text-decoration: underline;
 }
-.book-card-authors { display:flex; flex-wrap:wrap; gap:2px 6px; justify-content:flex-end; }
+.book-card-authors { display:inline; }
 
 /* Notes / image icons inline */
 .book-card-icons {
@@ -1011,16 +1011,23 @@ button, select, input[type="text"] { touch-action: manipulation; }
 
 .author-field-row { display:flex; align-items:center; gap:6px; }
 .author-field-row + .author-field-row { margin-top:6px; }
-.author-field-row input { flex:1; min-width:0; }
-.btn-add-author, .btn-remove-author {
+.author-input-wrap { position:relative; flex:1; min-width:0; }
+.author-input-wrap .author-input { width:100%; padding-left:30px; box-sizing:border-box; }
+.btn-add-author-inline {
+  position:absolute; left:8px; top:50%; transform:translateY(-50%);
+  background:none; border:none; cursor:pointer;
+  color:rgba(0,0,0,0.4); font-size:1rem; line-height:1;
+  padding:4px; display:flex; align-items:center; justify-content:center;
+  transition:opacity var(--t);
+}
+.btn-add-author-inline:hover { color:rgba(0,0,0,0.7); }
+.btn-remove-author {
   flex-shrink:0; width:36px; height:36px;
   border-radius:var(--r-sm); border:1.5px solid var(--color-border);
   background:var(--bg-card); cursor:pointer; font-size:1.1rem;
   display:flex; align-items:center; justify-content:center;
-  transition:var(--t);
+  transition:var(--t); color:var(--color-danger);
 }
-.btn-add-author:hover { background:var(--bg-hover); }
-.btn-remove-author { color:var(--color-danger); }
 .btn-remove-author:hover { background:#FEE2E2; }
 
 /* ============================================================

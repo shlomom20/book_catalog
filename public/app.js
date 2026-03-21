@@ -417,7 +417,7 @@ function renderDuplicateCard(books) {
     <div class="duplicate-badge">⚠️ ספר כפול (${books.length} עותקים)</div>
     <div class="book-card-top">
       <span class="book-card-title">${esc(books[0].name)}</span>
-      <div class="book-card-authors">${books[0].author.split(',').map(a => a.trim()).filter(Boolean).map(a => `<button class="btn-author-filter" data-action="filter-author" data-author="${esc(a)}">${esc(a)}</button>`).join('')}</div>
+      <div class="book-card-authors">${books[0].author.split(',').map(a => a.trim()).filter(Boolean).map(a => `<button class="btn-author-filter" data-action="filter-author" data-author="${esc(a)}">${esc(a)}</button>`).join(', ')}</div>
     </div>
     ${copies}
   </div>`;
@@ -480,7 +480,7 @@ function renderBookCard(book, isLoaned = false) {
   const notesIcon  = book.notes ? `<span title="יש הערות">💬</span>` : '';
   const loanBadge  = isLoaned ? `<span class="loan-badge">📤 מושאל</span>` : '';
   const authorBtns = book.author.split(',').map(a => a.trim()).filter(Boolean)
-    .map(a => `<button class="btn-author-filter" data-action="filter-author" data-author="${esc(a)}">${esc(a)}</button>`).join('');
+    .map(a => `<button class="btn-author-filter" data-action="filter-author" data-author="${esc(a)}">${esc(a)}</button>`).join(', ');
   return `<div class="book-card${isLoaned ? ' loaned' : ''}" data-action="open-detail" data-id="${book.id}">
     <div class="book-card-top">
       <span class="book-card-title">${esc(book.name)}</span>
@@ -532,7 +532,7 @@ function openBookDetailModal(id) {
   document.getElementById('bookDetailBody').innerHTML = `
     <div class="book-detail-field">
       <span class="book-detail-label">סופר</span>
-      <div style="display:flex;flex-wrap:wrap;gap:4px">${book.author.split(',').map(a => a.trim()).filter(Boolean).map(a => `<button class="btn-author-filter" data-action="filter-author" data-author="${esc(a)}" style="font-size:.9rem">${esc(a)}</button>`).join('')}</div>
+      <div>${book.author.split(',').map(a => a.trim()).filter(Boolean).map(a => `<button class="btn-author-filter" data-action="filter-author" data-author="${esc(a)}" style="font-size:.9rem">${esc(a)}</button>`).join(', ')}</div>
     </div>
     ${seriesHtml}
     <div class="book-detail-field">
@@ -2360,9 +2360,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Add author field button
+  // Add author field button (inline + inside input)
   document.getElementById('authorFieldsContainer').addEventListener('click', e => {
-    if (e.target.closest('.btn-add-author')) {
+    if (e.target.closest('.btn-add-author-inline')) {
       const row = createExtraAuthorRow('');
       document.getElementById('authorFieldsContainer').appendChild(row);
       row.querySelector('input').focus();
