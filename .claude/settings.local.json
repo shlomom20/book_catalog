@@ -8,7 +8,8 @@
       "Bash(curl -s http://localhost:3000/api/data)",
       "Bash(pkill -f \"node server.js\" 2>/dev/null; echo \"done\")",
       "Bash(node --check \"C:/Users/shlom/claude_projects/book-catalog/server.js\")",
-      "Bash(node --check \"C:/Users/shlom/claude_projects/book-catalog/public/app.js\")"
+      "Bash(node --check \"C:/Users/shlom/claude_projects/book-catalog/public/app.js\")",
+      "Bash(node --check server.js)"
     ]
   }
 }

@@ -956,6 +956,11 @@ function openShelfImgMgmt(rowId) {
   const currentWrap = document.getElementById('shelfImgCurrentWrap');
   const currentImg  = document.getElementById('shelfImgCurrent');
   if (row.image) {
+    const valid = row.image.startsWith('data:image/') || row.image.startsWith('https://');
+    console.log(`[Image] פתיחת ניהול תמונה לטור ${rowId}: ${row.image.length} תווים, תקין: ${valid}`);
+    if (!valid) {
+      showToast('שגיאה: התמונה השמורה נראית פגומה או חתוכה בגיליון', 'error');
+    }
     currentImg.src = row.image;
     currentWrap.style.display = '';
   } else {
@@ -964,12 +969,21 @@ function openShelfImgMgmt(rowId) {
   openModal('shelfImgMgmtModal');
 }
 
-async function saveShelfImage(base64) {
+async function uploadToCloudinary(base64) {
+  console.log(`[Cloudinary] שולח base64 להעלאה: ${base64.length} תווים`);
+  const result = await apiFetch('POST', '/api/upload', { base64, rowId: shelfImgTargetId });
+  console.log(`[Cloudinary] התקבל URL: ${result.url}`);
+  return result.url;
+}
+
+async function saveShelfImage(imageValue) {
   showLoadingOverlay(true);
+  console.log(`[Image] לפני שמירה — ערך: ${imageValue ? imageValue.slice(0, 60) + '…' : '(מחיקה)'}`);
   try {
-    await apiFetch('PUT', `/api/locations/${shelfImgTargetId}`, { image: base64 });
+    await apiFetch('PUT', `/api/locations/${shelfImgTargetId}`, { image: imageValue });
+    console.log(`[Image] נשמר בהצלחה`);
     const row = getRow(shelfImgTargetId);
-    if (row) row.image = base64;
+    if (row) row.image = imageValue;
     const currentWrap = document.getElementById('shelfImgCurrentWrap');
     const currentImg  = document.getElementById('shelfImgCurrent');
     if (base64) {
@@ -992,6 +1006,12 @@ async function saveShelfImage(base64) {
 function openShelfImgViewer(rowId) {
   const row = getRow(rowId);
   if (!row || !row.image) return;
+  const valid = row.image.startsWith('data:image/') || row.image.startsWith('https://');
+  console.log(`[Image] פתיחת תצוגת תמונה לטור ${rowId}: ${row.image.length} תווים, תקין: ${valid}`);
+  if (!valid) {
+    showToast('שגיאה: התמונה השמורה נראית פגומה או חתוכה בגיליון', 'error');
+    return;
+  }
   document.getElementById('shelfImgViewTitle').textContent = row.name;
   document.getElementById('shelfImgViewImg').src = row.image;
   openModal('shelfImgViewModal');
@@ -2403,10 +2423,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const file = e.target.files[0];
     if (!file) return;
     try {
-      let base64 = await compressImage(file, 300, 0.75);
-      if (base64.length > 45000) base64 = await compressImage(file, 200, 0.65);
+      let base64 = await compressImage(file, 800, 0.85);
+      console.log(`[Image] לאחר דחיסה 800px/0.85: ${base64.length} תווים`);
+      if (base64.length > 45000) {
+        base64 = await compressImage(file, 500, 0.75);
+        console.log(`[Image] לאחר דחיסה 500px/0.75: ${base64.length} תווים`);
+      }
+      if (base64.length > 45000) {
+        base64 = await compressImage(file, 300, 0.65);
+        console.log(`[Image] לאחר דחיסה 300px/0.65: ${base64.length} תווים`);
+      }
       if (base64.length > 45000) { showToast('התמונה גדולה מדי גם לאחר דחיסה', 'error'); return; }
-      await saveShelfImage(base64);
+      const imageUrl = await uploadToCloudinary(base64);
+      await saveShelfImage(imageUrl);
     } catch {
       showToast('שגיאה בעיבוד התמונה', 'error');
     }
@@ -2472,10 +2501,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('sidebarDoneBtn').addEventListener('click', closeSidebar);
   document.getElementById('sidebarBackdrop').addEventListener('click', closeSidebar);
 
-  // Also close sidebar after selecting a filter on mobile
-  document.getElementById('locationTree').addEventListener('click', () => {
-    if (window.innerWidth < 768) setTimeout(closeSidebar, 180);
-  });
 
   // ---- Sort ----
   const sortBtn      = document.getElementById('sortBtn');

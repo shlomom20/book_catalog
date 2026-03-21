@@ -4,12 +4,19 @@
 'use strict';
 
 require('dotenv').config();
-const express  = require('express');
+const express    = require('express');
 const { google } = require('googleapis');
-const path     = require('path');
+const path       = require('path');
+const cloudinary = require('cloudinary').v2;
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key:    process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ---- Config ----
@@ -131,7 +138,14 @@ function parseLocations(rows) {
     if (!id || !name) return;
     if (type === 'ארון')  out.cabinets.push({ id, name, owner: extra });
     if (type === 'מדף')   out.shelves.push({ id, cabinetId: pid, name });
-    if (type === 'טור')   out.rows.push({ id, shelfId: pid, name, image });
+    if (type === 'טור') {
+      if (image) {
+        const validPrefix = image.startsWith('data:image/') || image.startsWith('https://');
+        console.log(`[Image] טעינת תמונה לטור ${id} (${name}): ${image.length} תווים, תקין: ${validPrefix}`);
+        if (!validPrefix) console.warn(`[Image] אזהרה: תמונה לטור ${id} נראית פגומה/חתוכה`);
+      }
+      out.rows.push({ id, shelfId: pid, name, image });
+    }
     if (type === 'שכבה')  out.layers.push({ id, rowId: pid, name });
   });
   return out;
@@ -212,6 +226,26 @@ async function ensureSheets() {
 // ============================================================
 // API Routes
 // ============================================================
+
+// POST /api/upload  – upload image to Cloudinary, return URL
+app.post('/api/upload', async (req, res) => {
+  try {
+    const { base64, rowId } = req.body;
+    if (!base64) return res.status(400).json({ error: 'חסר base64' });
+    console.log(`[Cloudinary] מעלה תמונה לטור ${rowId}: ${base64.length} תווים`);
+    const result = await cloudinary.uploader.upload(base64, {
+      folder:        'book-catalog',
+      public_id:     `row-${rowId}`,
+      overwrite:     true,
+      resource_type: 'image',
+    });
+    console.log(`[Cloudinary] הועלה בהצלחה: ${result.secure_url} (${result.bytes} bytes)`);
+    res.json({ url: result.secure_url });
+  } catch (e) {
+    console.error('[Cloudinary] שגיאת העלאה:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // GET /api/data  – all books + locations
 app.get('/api/data', async (req, res) => {
@@ -346,13 +380,37 @@ app.put('/api/locations/:id', async (req, res) => {
     const idx  = rows.findIndex((r, i) => i > 0 && parseInt(r[1]) === targetId);
     if (idx === -1) return res.status(404).json({ error: 'לא נמצא' });
     const row = rows[idx];
+    const prevImage    = row[5] ?? '';
+    const imageToSave  = image !== undefined ? image : prevImage;
+    if (image !== undefined) {
+      console.log(`[Image] שמירת תמונה למיקום ${targetId}: ${image || '(מחיקה)'}`);
+    }
+    // מחק מ-Cloudinary כאשר מוחקים תמונה קיימת
+    if (image === '' && prevImage.includes('cloudinary.com')) {
+      try {
+        await cloudinary.uploader.destroy(`book-catalog/row-${targetId}`);
+        console.log(`[Cloudinary] נמחקה תמונה: book-catalog/row-${targetId}`);
+      } catch (e) {
+        console.warn(`[Cloudinary] שגיאה במחיקה: ${e.message}`);
+      }
+    }
     await sheetUpdate(LOC_SHEET, idx + 1, [
       row[0], row[1],
       name  !== undefined ? name  : row[2],
       row[3] ?? '',
       owner !== undefined ? owner : (row[4] ?? ''),
-      image !== undefined ? image : (row[5] ?? ''),
+      imageToSave,
     ]);
+    // אימות שמירה — רלוונטי רק לbase64 ישן (URLs קצרים תמיד יישמרו תקין)
+    if (image !== undefined && image && image.startsWith('data:image/')) {
+      const verifyRows = await sheetGet(LOC_SHEET);
+      const vIdx = verifyRows.findIndex((r, i) => i > 0 && parseInt(r[1]) === targetId);
+      const savedImage = vIdx !== -1 ? (verifyRows[vIdx][5] ?? '') : '';
+      console.log(`[Image] אימות לאחר שמירה: ${savedImage.length} תווים (נשלחו ${image.length})`);
+      if (savedImage.length < image.length * 0.95) {
+        return res.status(500).json({ error: `התמונה נחתכה בשמירה: נשמרו ${savedImage.length} תווים מתוך ${image.length}` });
+      }
+    }
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
