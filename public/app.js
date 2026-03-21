@@ -10,11 +10,13 @@ const state = {
   filter: { cabinetId: null, shelfId: null, rowId: null, layerId: null, owner: null },
   seriesFilter: null,  // string | null
   authorFilter: null,  // string | null
-  mobileTab: 'catalog', // 'catalog' | 'manage' | 'loans'
+  loanedOnly: false,
+  mobileTab: 'catalog', // 'catalog' | 'manage' | 'loans' | 'wishlist'
   editingBookId: null,
   deletingBookId: null,
   viewingBookId: null,
   viewingLoanId: null,
+  fromWishlistId: null,
 };
 
 const SORT_LABELS = {
@@ -29,29 +31,39 @@ const SORT_LABELS = {
 // API LAYER
 // ============================================================
 
-let db = { books: [], locations: { cabinets: [], shelves: [], rows: [], layers: [] }, loans: [] };
+let db = { books: [], locations: { cabinets: [], shelves: [], rows: [], layers: [] }, loans: [], wishlist: [] };
 let loanSelectedBookId = null;
 
 async function apiFetch(method, path, body) {
   const opts = { method, headers: { 'Content-Type': 'application/json' } };
   if (body !== undefined) opts.body = JSON.stringify(body);
   const res = await fetch(path, opts);
+  const text = await res.text();
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
+    console.error(`apiFetch ${method} ${path} → ${res.status}:`, text);
+    let err;
+    try { err = JSON.parse(text); } catch { err = { error: text || res.statusText }; }
     throw new Error(err.error || res.statusText);
   }
-  return res.json();
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    console.error(`apiFetch ${method} ${path} → non-JSON response:`, text.slice(0, 300));
+    throw new Error('השרת החזיר תשובה לא תקינה — ודא שהשרת פועל ועודכן (הפעל מחדש)');
+  }
 }
 
 async function loadData() {
-  const [data, loans] = await Promise.all([
+  const [data, loans, wishlist] = await Promise.all([
     apiFetch('GET', '/api/data'),
     apiFetch('GET', '/api/loans'),
+    apiFetch('GET', '/api/wishlist'),
   ]);
   db.books     = data.books;
   db.locations = data.locations;
   if (!db.locations.layers) db.locations.layers = [];
-  db.loans = loans;
+  db.loans    = loans;
+  db.wishlist = wishlist;
 }
 
 function showLoadingOverlay(show) {
@@ -100,7 +112,9 @@ function sortBooks(books) {
 
 // ---- Filter & Search ----
 function getFilteredBooks() {
+  const loanedBookIds = state.loanedOnly ? new Set(db.loans.map(l => l.bookId)) : null;
   return db.books.filter(book => {
+    if (loanedBookIds && !loanedBookIds.has(book.id)) return false;
     if (state.filter.owner) {
       const cab = book.cabinetId ? getCabinet(book.cabinetId) : null;
       const bookOwner = (cab && cab.owner) ? cab.owner.trim().toLowerCase() : '';
@@ -173,7 +187,7 @@ function renderStats() {
 
   // Filter badge
   const hasFilter = state.filter.cabinetId || state.filter.shelfId || state.filter.rowId ||
-                    state.filter.layerId || state.filter.owner || state.search || state.seriesFilter || state.authorFilter;
+                    state.filter.layerId || state.filter.owner || state.search || state.seriesFilter || state.authorFilter || state.loanedOnly;
   const badge = document.getElementById('filterBadge');
   if (hasFilter) { badge.textContent = ''; badge.classList.add('visible'); }
   else           { badge.classList.remove('visible'); }
@@ -182,23 +196,33 @@ function renderStats() {
 // ---- Mobile Tab Switching ----
 function switchMobileTab(tab) {
   state.mobileTab = tab;
-  const isCatalog = tab === 'catalog';
-  const isManage  = tab === 'manage';
-  const isLoans   = tab === 'loans';
+  const isCatalog  = tab === 'catalog';
+  const isManage   = tab === 'manage';
+  const isLoans    = tab === 'loans';
+  const isWishlist = tab === 'wishlist';
 
   document.getElementById('catalogView').style.display    = isCatalog ? '' : 'none';
-  document.getElementById('managementView').style.display = isManage ? 'block' : 'none';
-  document.getElementById('loansView').style.display      = isLoans ? 'block' : 'none';
-  document.getElementById('statsBar').style.display       = isCatalog ? '' : 'none';
+  document.getElementById('managementView').style.display = isManage   ? 'block' : 'none';
+  document.getElementById('loansView').style.display      = isLoans    ? 'block' : 'none';
+  document.getElementById('wishlistView').style.display   = isWishlist ? 'block' : 'none';
+  document.getElementById('statsBar').style.display       = isCatalog  ? '' : 'none';
 
-  document.querySelectorAll('.bottom-tab').forEach(btn => {
+  document.querySelectorAll('.bottom-tab, .nav-desktop-tab').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.tab === tab);
   });
 
-  document.body.classList.toggle('tab-manage', isManage);
-  document.body.classList.toggle('tab-loans',  isLoans);
+  document.body.classList.toggle('tab-manage',   isManage);
+  document.body.classList.toggle('tab-loans',    isLoans);
+  document.body.classList.toggle('tab-wishlist', isWishlist);
 
-  if (isLoans) renderLoansPage();
+  const navTitle = document.getElementById('navTabTitle');
+  if (isManage)        navTitle.textContent = 'ניהול קטלוג';
+  else if (isLoans)    navTitle.textContent = 'השאלות 📖';
+  else if (isWishlist) navTitle.textContent = 'רשימת קניות 🛒';
+  else                 navTitle.textContent = '';
+
+  if (isLoans)    renderLoansPage();
+  if (isWishlist) renderWishlistPage();
 
   // Scroll to top when switching
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -247,8 +271,16 @@ function renderLocationTree() {
     ${ownerOptions}`;
   }
 
+  if (db.loans.length > 0) {
+    html += `<div class="tree-section-title">סינון מיוחד</div>
+    <div class="tree-all ${state.loanedOnly ? 'active' : ''}" data-action="filter-loaned">
+      📤 ספרים מושאלים
+      <span class="tree-count">${db.loans.length}</span>
+    </div>`;
+  }
+
   html += `<div class="tree-section-title">סינון לפי מיקום</div>
-  <div class="tree-all ${!f.cabinetId && !f.shelfId && !f.rowId && !f.layerId && !f.owner ? 'active' : ''}" data-action="filter-all">
+  <div class="tree-all ${!f.cabinetId && !f.shelfId && !f.rowId && !f.layerId && !f.owner && !state.loanedOnly ? 'active' : ''}" data-action="filter-all">
     📚 כל הספרים
     <span class="tree-count">${db.books.length}</span>
   </div>`;
@@ -553,6 +585,7 @@ function openBookDetailModal(id) {
   `;
 
   document.getElementById('bookDetailLoan').style.display = loan ? 'none' : '';
+  document.getElementById('bookDetailReturn').style.display = loan ? '' : 'none';
 
   openModal('bookDetailModal');
 }
@@ -786,6 +819,7 @@ async function saveBook() {
     seriesNumber: document.getElementById('bookSeriesNumber').value.trim(),
   };
 
+  const fromWishlist = state.fromWishlistId;
   showLoadingOverlay(true);
   try {
     if (state.editingBookId) {
@@ -796,9 +830,18 @@ async function saveBook() {
     } else {
       const result = await apiFetch('POST', '/api/books', bookData);
       db.books.push(result);
-      showToast('הספר נוסף בהצלחה ✓', 'success');
+      if (fromWishlist) {
+        state.fromWishlistId = null;
+        await apiFetch('PUT', `/api/wishlist/${fromWishlist}`, {});
+        const item = db.wishlist.find(w => w.id === fromWishlist);
+        if (item) item.bought = 'כן';
+        showToast('הספר נוסף לקטלוג וסומן כנקנה ✓', 'success');
+      } else {
+        showToast('הספר נוסף בהצלחה ✓', 'success');
+      }
     }
     closeModal('bookModal');
+    if (fromWishlist) renderWishlistPage();
     render();
   } catch (e) {
     showToast('שגיאה: ' + e.message, 'error');
@@ -1338,6 +1381,88 @@ async function returnBook() {
 }
 
 // ============================================================
+// WISHLIST
+// ============================================================
+
+function renderWishlistPage() {
+  const container = document.getElementById('wishlistContainer');
+  if (!db.wishlist.length) {
+    container.innerHTML = `<div class="empty-state" style="margin-top:30px">
+      <div class="empty-icon">🛒</div>
+      <h3>רשימת הקניות ריקה</h3>
+      <p>הוסף ספרים שברצונך להשיג</p>
+    </div>`;
+    return;
+  }
+
+  const notBought = db.wishlist.filter(w => !w.bought);
+  const bought    = db.wishlist.filter(w =>  w.bought);
+
+  container.innerHTML = [...notBought, ...bought].map(w => {
+    const seriesLabel = w.series
+      ? (w.seriesNumber ? `📚 ${esc(w.series)} #${esc(w.seriesNumber)}` : `📚 ${esc(w.series)}`)
+      : '';
+    return `
+    <div class="wishlist-card ${w.bought ? 'bought' : ''}">
+      <div class="wishlist-card-info">
+        <div class="wishlist-card-name">${esc(w.name)}</div>
+        ${w.author   ? `<div class="wishlist-card-author">${esc(w.author)}</div>` : ''}
+        ${seriesLabel ? `<div class="wishlist-card-series">${seriesLabel}</div>` : ''}
+      </div>
+      <div class="wishlist-card-actions">
+        ${!w.bought
+          ? `<button class="btn-bought" data-action="mark-bought" data-id="${w.id}">נקנה ✓</button>`
+          : `<span class="bought-label">✓ נקנה</span>`}
+        <button class="btn-icon-sm" data-action="delete-wishlist" data-id="${w.id}" title="מחק">🗑️</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openWishlistAddModal() {
+  document.getElementById('wishlistBookName').value             = '';
+  document.getElementById('wishlistBookAuthor').value           = '';
+  document.getElementById('wishlistBookSeries').value           = '';
+  document.getElementById('wishlistBookSeriesNumber').value     = '';
+  document.getElementById('wishlistBookNameError').textContent  = '';
+  openModal('wishlistAddModal');
+  setTimeout(() => document.getElementById('wishlistBookName').focus(), 50);
+}
+
+async function saveWishlistItem() {
+  const name         = document.getElementById('wishlistBookName').value.trim();
+  const author       = document.getElementById('wishlistBookAuthor').value.trim();
+  const series       = document.getElementById('wishlistBookSeries').value.trim();
+  const seriesNumber = document.getElementById('wishlistBookSeriesNumber').value.trim();
+  document.getElementById('wishlistBookNameError').textContent = '';
+  if (!name) { document.getElementById('wishlistBookNameError').textContent = 'שדה חובה'; return; }
+
+  showLoadingOverlay(true);
+  try {
+    const result = await apiFetch('POST', '/api/wishlist', { name, author, series, seriesNumber });
+    db.wishlist.push(result);
+    closeModal('wishlistAddModal');
+    renderWishlistPage();
+    showToast('הספר נוסף לרשימת הקניות ✓', 'success');
+  } catch (e) {
+    showToast('שגיאה: ' + e.message, 'error');
+  } finally {
+    showLoadingOverlay(false);
+  }
+}
+
+function openAddBookFromWishlist(id) {
+  const item = db.wishlist.find(w => w.id === id);
+  if (!item) return;
+  state.fromWishlistId = id;
+  openAddBookModal();
+  document.getElementById('bookName').value         = item.name;
+  document.getElementById('bookAuthor').value       = item.author;
+  document.getElementById('bookSeries').value       = item.series || '';
+  document.getElementById('bookSeriesNumber').value = item.seriesNumber || '';
+}
+
+// ============================================================
 // TOAST
 // ============================================================
 let toastTimer;
@@ -1590,6 +1715,7 @@ document.addEventListener('DOMContentLoaded', () => {
     state.filter = { cabinetId: null, shelfId: null, rowId: null, layerId: null, owner: null };
     state.seriesFilter = null;
     state.authorFilter = null;
+    state.loanedOnly   = false;
     render();
   });
 
@@ -1606,8 +1732,11 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         state.filter = { cabinetId: null, shelfId: null, rowId: null, layerId: null, owner };
       }
+    } else if (action === 'filter-loaned') {
+      state.loanedOnly = !state.loanedOnly;
     } else if (action === 'filter-all') {
       state.filter = { cabinetId: null, shelfId: null, rowId: null, layerId: null, owner: null };
+      state.loanedOnly = false;
     } else if (action === 'filter-cabinet') {
       const id = parseInt(el.dataset.id);
       if (state.filter.cabinetId === id && !state.filter.shelfId) {
@@ -1674,6 +1803,13 @@ document.addEventListener('DOMContentLoaded', () => {
     closeModal('bookDetailModal');
     openLoanModal(id);
   });
+  document.getElementById('bookDetailReturn').addEventListener('click', () => {
+    const loan = db.loans.find(l => l.bookId === state.viewingBookId);
+    if (!loan) return;
+    state.viewingLoanId = loan.id;
+    closeModal('bookDetailModal');
+    returnBook();
+  });
 
   document.getElementById('bookDetailEdit').addEventListener('click', () => {
     const id = state.viewingBookId;
@@ -1713,8 +1849,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ---- Book Modal ----
-  document.getElementById('bookModalClose').addEventListener('click',  () => closeModal('bookModal'));
-  document.getElementById('bookModalCancel').addEventListener('click', () => closeModal('bookModal'));
+  document.getElementById('bookModalClose').addEventListener('click',  () => { state.fromWishlistId = null; closeModal('bookModal'); });
+  document.getElementById('bookModalCancel').addEventListener('click', () => { state.fromWishlistId = null; closeModal('bookModal'); });
   document.getElementById('bookModalSave').addEventListener('click', saveBook);
   document.getElementById('bookModalSaveAndAdd').addEventListener('click', saveBookAndContinue);
 
@@ -2319,7 +2455,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('shelfImgViewClose2').addEventListener('click', () => closeModal('shelfImgViewModal'));
 
   // Close modal on overlay click
-  ['bookModal', 'deleteModal', 'locationsModal', 'bookDetailModal', 'shelfImgMgmtModal', 'shelfImgViewModal', 'loanModal', 'loanDetailModal'].forEach(id => {
+  ['bookModal', 'deleteModal', 'locationsModal', 'bookDetailModal', 'shelfImgMgmtModal', 'shelfImgViewModal', 'loanModal', 'loanDetailModal', 'wishlistAddModal'].forEach(id => {
     document.getElementById(id).addEventListener('click', e => {
       if (e.target === document.getElementById(id)) closeModal(id);
     });
@@ -2343,8 +2479,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // ---- Bottom Nav Tabs ----
-  document.querySelectorAll('.bottom-tab').forEach(btn => {
+  // ---- Bottom Nav Tabs + Desktop Nav Tabs ----
+  document.querySelectorAll('.bottom-tab, .nav-desktop-tab').forEach(btn => {
     btn.addEventListener('click', () => switchMobileTab(btn.dataset.tab));
   });
 
@@ -2460,7 +2596,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('importModalConfirm').addEventListener('click', confirmImport);
 
   // ---- Back button: close open modal/sidebar instead of leaving app ----
-  const ALL_MODALS = ['bookModal', 'deleteModal', 'locationsModal', 'bookDetailModal', 'shelfImgMgmtModal', 'shelfImgViewModal', 'loanModal', 'loanDetailModal'];
+  const ALL_MODALS = ['bookModal', 'deleteModal', 'locationsModal', 'bookDetailModal', 'shelfImgMgmtModal', 'shelfImgViewModal', 'loanModal', 'loanDetailModal', 'wishlistAddModal'];
   window.addEventListener('popstate', () => {
     if (_historyBack) { _historyBack = false; return; }
     const openId = ALL_MODALS.find(id => document.getElementById(id).classList.contains('open'));
@@ -2474,6 +2610,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ---- Loans ----
   document.getElementById('addLoanBtn').addEventListener('click', () => openLoanModal());
+  document.getElementById('navAddLoanBtn').addEventListener('click', () => openLoanModal());
   document.getElementById('loanModalClose').addEventListener('click',   () => closeModal('loanModal'));
   document.getElementById('loanModalCancel').addEventListener('click',  () => closeModal('loanModal'));
   document.getElementById('loanModalSave').addEventListener('click', saveLoan);
@@ -2529,6 +2666,33 @@ document.addEventListener('DOMContentLoaded', () => {
     const el = e.target.closest('[data-action]');
     if (!el) return;
     if (el.dataset.action === 'open-loan') openLoanDetailModal(parseInt(el.dataset.id));
+  });
+
+  // ---- Wishlist ----
+  document.getElementById('addWishlistBtn').addEventListener('click',        () => openWishlistAddModal());
+  document.getElementById('navAddWishlistBtn').addEventListener('click',     () => openWishlistAddModal());
+  document.getElementById('wishlistAddModalClose').addEventListener('click',  () => closeModal('wishlistAddModal'));
+  document.getElementById('wishlistAddModalCancel').addEventListener('click', () => closeModal('wishlistAddModal'));
+  document.getElementById('wishlistAddModalSave').addEventListener('click',   saveWishlistItem);
+
+  document.getElementById('wishlistContainer').addEventListener('click', async e => {
+    const el = e.target.closest('[data-action]');
+    if (!el) return;
+    if (el.dataset.action === 'mark-bought') {
+      openAddBookFromWishlist(parseInt(el.dataset.id));
+    } else if (el.dataset.action === 'delete-wishlist') {
+      const id = parseInt(el.dataset.id);
+      showLoadingOverlay(true);
+      try {
+        await apiFetch('DELETE', `/api/wishlist/${id}`);
+        db.wishlist = db.wishlist.filter(w => w.id !== id);
+        renderWishlistPage();
+      } catch (e2) {
+        showToast('שגיאה: ' + e2.message, 'error');
+      } finally {
+        showLoadingOverlay(false);
+      }
+    }
   });
 
   // ---- Initial load ----

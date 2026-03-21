@@ -11,15 +11,24 @@
 
   <!-- Navbar -->
   <nav class="navbar">
+    <img src="header.jpeg" class="nav-header-img" alt="">
     <div class="nav-brand">
-      <span class="nav-icon">📚</span>
       <span>קטלוג הספרייה</span>
     </div>
+    <nav class="nav-desktop-tabs" id="navDesktopTabs">
+      <button class="nav-desktop-tab active" data-tab="catalog">📚 קטלוג</button>
+      <button class="nav-desktop-tab" data-tab="manage">⚙️ ניהול</button>
+      <button class="nav-desktop-tab" data-tab="loans">📖 השאלות</button>
+      <button class="nav-desktop-tab" data-tab="wishlist">🛒 רשימת קניות</button>
+    </nav>
+    <span class="nav-tab-title" id="navTabTitle"></span>
     <div class="nav-search">
       <span class="search-icon">🔍</span>
       <input type="text" id="searchInput" placeholder="חפש לפי שם ספר, סופר, מיקום..." autocomplete="off">
       <button class="search-clear" id="searchClear">✕</button>
     </div>
+    <button class="btn-add-nav nav-loan-action" id="navAddLoanBtn">＋ השאל</button>
+    <button class="btn-add-nav nav-wishlist-action" id="navAddWishlistBtn">＋ הוסף לרשימה</button>
     <button class="btn-add-nav" id="addBookBtn">＋ הוסף</button>
   </nav>
 
@@ -149,9 +158,18 @@
 
   </div>
 
-  <!-- ===== LOANS VIEW (mobile tab 3) ===== -->
+  <!-- ===== WISHLIST VIEW (mobile tab 3) ===== -->
+  <div id="wishlistView" class="wishlist-view">
+    <div class="wishlist-view-header">
+      <h2 class="mgmt-heading" style="margin:0;border:none;padding:0">רשימת קניות 🛒</h2>
+      <button class="btn-primary" id="addWishlistBtn" style="min-height:40px;padding:0 14px;font-size:.9rem">＋ הוסף ספר</button>
+    </div>
+    <div id="wishlistContainer"></div>
+  </div>
+
+  <!-- ===== LOANS VIEW (mobile tab 4) ===== -->
   <div id="loansView" class="loans-view">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--color-border-lt)">
+    <div class="loans-view-header">
       <h2 class="mgmt-heading" style="margin:0;border:none;padding:0">השאלות 📖</h2>
       <button class="btn-primary" id="addLoanBtn" style="min-height:40px;padding:0 14px;font-size:.9rem">＋ השאל ספר</button>
     </div>
@@ -167,6 +185,10 @@
     <button class="bottom-tab" id="bottomTabLoans" data-tab="loans">
       <span class="bottom-tab-icon">📖</span>
       <span class="bottom-tab-label">השאלות</span>
+    </button>
+    <button class="bottom-tab" id="bottomTabWishlist" data-tab="wishlist">
+      <span class="bottom-tab-icon">🛒</span>
+      <span class="bottom-tab-label">רשימת קניות</span>
     </button>
     <button class="bottom-tab" id="bottomTabManage" data-tab="manage">
       <span class="bottom-tab-icon">⚙️</span>
@@ -408,6 +430,7 @@
       <div class="modal-footer modal-footer-wrap">
         <button class="btn-secondary" id="bookDetailClose2">סגור</button>
         <button class="btn-primary" id="bookDetailLoan" style="background:#EA580C">📤 השאל</button>
+        <button class="btn-primary" id="bookDetailReturn" style="background:#2E7D32;display:none">✅ הוחזר</button>
         <button class="btn-primary" id="bookDetailEdit">✏️ עריכה</button>
         <button class="btn-danger" id="bookDetailDelete">🗑️ מחק</button>
       </div>
@@ -508,6 +531,41 @@
       </div>
       <div class="modal-footer">
         <button class="btn-secondary" id="shelfImgViewClose2">סגור</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== WISHLIST ADD MODAL ===== -->
+  <div class="modal-overlay" id="wishlistAddModal">
+    <div class="modal modal-small">
+      <div class="modal-header">
+        <h2>🛒 הוסף לרשימת קניות</h2>
+        <button class="modal-close" id="wishlistAddModalClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group" style="margin-bottom:14px">
+          <label for="wishlistBookName">שם הספר <span class="required">*</span></label>
+          <input type="text" id="wishlistBookName" placeholder="שם הספר">
+          <span class="field-error" id="wishlistBookNameError"></span>
+        </div>
+        <div class="form-group">
+          <label for="wishlistBookAuthor">שם הסופר</label>
+          <input type="text" id="wishlistBookAuthor" placeholder="שם הסופר (אופציונלי)">
+        </div>
+        <div class="form-row" style="margin-top:10px">
+          <div class="form-group">
+            <label for="wishlistBookSeries">סדרה</label>
+            <input type="text" id="wishlistBookSeries" placeholder="שם הסדרה (אופציונלי)">
+          </div>
+          <div class="form-group form-group-narrow">
+            <label for="wishlistBookSeriesNumber"># בסדרה</label>
+            <input type="number" id="wishlistBookSeriesNumber" placeholder="מס'" min="1">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" id="wishlistAddModalCancel">ביטול</button>
+        <button class="btn-primary" id="wishlistAddModalSave">🛒 הוסף לרשימה</button>
       </div>
     </div>
   </div>

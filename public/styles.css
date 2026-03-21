@@ -47,6 +47,9 @@ body {
 /* ---------- Utility ---------- */
 .hidden   { display: none !important; }
 .desktop-only { display: none; }
+.nav-loan-action { display: none !important; }
+.nav-desktop-tabs { display: none; }
+.nav-tab-title { display: none; }
 
 /* Mobile: hide nav/bar buttons in catalog tab */
 @media (max-width: 767px) {
@@ -58,6 +61,32 @@ body {
   body.tab-manage #addBookBtn { display: none !important; }
   body.tab-manage .stats-bar  { display: none !important; }
   body.tab-manage .management-view { margin-top: var(--nav-h); }
+
+  /* Tab titles in top navbar */
+  .nav-tab-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #fff;
+    flex: 1;
+    text-align: center;
+    display: none;
+  }
+  body.tab-manage   .nav-tab-title,
+  body.tab-loans    .nav-tab-title,
+  body.tab-wishlist .nav-tab-title { display: block; }
+
+  /* Hide the catalog brand when on sub-tabs */
+  body.tab-manage  .nav-brand,
+  body.tab-loans   .nav-brand,
+  body.tab-wishlist .nav-brand { display: none; }
+
+  /* Hide the inline headings inside the views — title lives in navbar */
+  body.tab-manage .mgmt-heading { display: none; }
+  body.tab-loans  .loans-view-header { display: none; }
+
+  /* "+ השאל" button in top navbar (loans tab only) */
+  .nav-loan-action { display: none !important; }
+  body.tab-loans .nav-loan-action { display: inline-flex !important; }
 }
 
 /* ============================================================
@@ -83,7 +112,7 @@ body {
   flex-shrink: 0;
 }
 
-.nav-brand span:last-child { display: none; } /* hide text on mobile */
+.nav-brand span { display: none; } /* title hidden everywhere */
 
 .nav-search {
   flex: 1;
@@ -138,6 +167,9 @@ body {
 
 /* Add Book button in navbar */
 .btn-add-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: var(--color-accent);
   color: #fff;
   border: none;
@@ -1278,17 +1310,70 @@ button, select, input[type="text"] { touch-action: manipulation; }
 
   /* Bottom nav: hidden on desktop */
   .bottom-nav      { display: none; }
-  .management-view { display: none !important; }
+  .management-view { display: none; }   /* JS overrides this */
   .main-layout,
   .management-view { padding-bottom: 0; }
 
   /* Navbar */
-  .navbar { padding:0 24px; gap:16px; }
+  .navbar { padding:0 24px; gap:12px; }
   .nav-brand { font-size:1.2rem; }
-  .nav-brand span:last-child { display:inline; } /* show text */
   .nav-search input { font-size:.9rem; }
 
   .desktop-only { display:inline-flex; }
+
+  /* Desktop navigation tabs */
+  .nav-desktop-tabs {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+  .nav-desktop-tab {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,.75);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: .88rem;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: var(--t);
+    line-height: 1.4;
+  }
+  .nav-desktop-tab:hover { background: rgba(255,255,255,.15); color: #fff; }
+  .nav-desktop-tab.active { background: rgba(255,255,255,.22); color: #fff; font-weight: 700; }
+
+  /* On non-catalog desktop tabs: hide search and add button */
+  body.tab-manage .nav-search,
+  body.tab-loans  .nav-search,
+  body.tab-wishlist .nav-search  { display: none; }
+  body.tab-manage #addBookBtn,
+  body.tab-loans  #addBookBtn,
+  body.tab-wishlist #addBookBtn  { display: none; }
+
+  /* Loan / wishlist action buttons visible on desktop too, pushed to far left */
+  body.tab-loans    .nav-loan-action     { display: inline-flex !important; margin-right: auto; }
+  body.tab-wishlist .nav-wishlist-action { display: inline-flex !important; margin-right: auto; }
+
+  /* Hide the inline add button inside wishlist view — navbar button is enough */
+  #addWishlistBtn { display: none; }
+
+  /* Hide inline page headings — desktop nav tabs are enough */
+  .mgmt-heading,
+  .loans-view-header,
+  .wishlist-view-header { display: none; }
+
+  /* Desktop layout for management / loans / wishlist views */
+  .management-view,
+  .loans-view,
+  .wishlist-view {
+    margin-top: var(--nav-h);  /* stats bar hidden on these tabs */
+    padding: 28px 40px;
+    max-width: 860px;
+    margin-inline: auto;
+    padding-bottom: 40px;
+  }
 
   /* Stats bar */
   .stats-left  { display:flex; align-items:center; gap:16px; }
@@ -1716,12 +1801,155 @@ button, select, input[type="text"] { touch-action: manipulation; }
   body.tab-loans #addBookBtn { display: none !important; }
   body.tab-loans .stats-bar  { display: none !important; }
   body.tab-loans .loans-view { margin-top: var(--nav-h); }
+
+  body.tab-wishlist .nav-search,
+  body.tab-wishlist #addBookBtn { display: none !important; }
+  body.tab-wishlist .stats-bar  { display: none !important; }
+  body.tab-wishlist .wishlist-view { margin-top: var(--nav-h); }
+  body.tab-wishlist .wishlist-view-header { display: none; }
 }
 
-/* Desktop: loans view is mobile-only */
+/* Desktop: loans + wishlist padding reset */
 @media (min-width: 768px) {
-  .loans-view { display: none !important; }
+  .loans-view,
+  .wishlist-view { display: none; }   /* JS overrides this */
   .main-layout,
   .management-view,
-  .loans-view { padding-bottom: 0; }
+  .loans-view,
+  .wishlist-view { padding-bottom: 0; }
 }
+
+/* ============================================================
+   NAVBAR HEADER IMAGE
+   ============================================================ */
+.nav-header-img {
+  height: 36px;
+  width: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   WISHLIST VIEW
+   ============================================================ */
+.wishlist-view {
+  display: none;
+  margin-top: calc(var(--nav-h) + var(--bar-h));
+  padding: 16px 16px 0;
+  min-height: calc(100vh - var(--nav-h) - var(--bar-h));
+  padding-bottom: var(--bottom-nav-h);
+}
+
+.wishlist-view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 12px;
+}
+
+.wishlist-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--bg-surface);
+  border: 1.5px solid var(--color-border-lt);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  box-shadow: var(--shadow-sm);
+  transition: opacity var(--t);
+}
+
+.wishlist-card.bought {
+  opacity: 0.45;
+}
+
+.wishlist-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.wishlist-card-name {
+  font-size: .97rem;
+  font-weight: 700;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wishlist-card.bought .wishlist-card-name {
+  text-decoration: line-through;
+  color: var(--color-muted);
+}
+
+.wishlist-card-author {
+  font-size: .83rem;
+  color: var(--color-muted);
+  margin-top: 3px;
+}
+
+.wishlist-card.bought .wishlist-card-author {
+  text-decoration: line-through;
+}
+
+.wishlist-card-series {
+  font-size: .78rem;
+  color: var(--color-accent);
+  margin-top: 3px;
+}
+
+.wishlist-card.bought .wishlist-card-series {
+  text-decoration: line-through;
+  opacity: .7;
+}
+
+.wishlist-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.btn-bought {
+  background: #16A34A;
+  color: #fff;
+  border: none;
+  border-radius: var(--r-sm);
+  padding: 6px 12px;
+  font-size: .83rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  transition: var(--t);
+}
+.btn-bought:active { opacity: .8; transform: scale(.97); }
+
+.bought-label {
+  font-size: .83rem;
+  color: #16A34A;
+  font-weight: 700;
+}
+
+.btn-icon-sm {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: var(--r-sm);
+  color: var(--color-muted);
+  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+}
+.btn-icon-sm:hover { background: var(--bg-hover); }
+
+/* nav-wishlist-action in mobile wishlist tab only */
+.nav-wishlist-action { display: none !important; }
+body.tab-wishlist .nav-wishlist-action { display: inline-flex !important; }

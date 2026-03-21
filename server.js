@@ -17,6 +17,7 @@ const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 const BOOKS_SHEET    = 'ספרים';
 const LOC_SHEET      = 'מיקומים';
 const LOANS_SHEET    = 'השאלות';
+const WISHLIST_SHEET = 'רשימת_קניות';
 
 if (!SPREADSHEET_ID || !process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
   console.error('❌  חסרים SPREADSHEET_ID או GOOGLE_SERVICE_ACCOUNT_JSON ב-.env');
@@ -149,6 +150,20 @@ function parseLoans(rows) {
     .filter(l => l.id && l.bookId);
 }
 
+function parseWishlist(rows) {
+  if (rows.length <= 1) return [];
+  return rows.slice(1)
+    .map(r => ({
+      id:           parseInt(r[0]),
+      name:         r[1] || '',
+      author:       r[2] || '',
+      bought:       r[3] || '',
+      series:       r[4] || '',
+      seriesNumber: r[5] || '',
+    }))
+    .filter(w => w.id && w.name);
+}
+
 function maxId(items) {
   if (!items.length) return 0;
   return Math.max(...items.map(i => i.id));
@@ -162,7 +177,7 @@ async function ensureSheets() {
   const existing = meta.data.sheets.map(sh => sh.properties.title);
   meta.data.sheets.forEach(sh => { _sheetIds[sh.properties.title] = sh.properties.sheetId; });
 
-  const toAdd = [BOOKS_SHEET, LOC_SHEET, LOANS_SHEET].filter(n => !existing.includes(n));
+  const toAdd = [BOOKS_SHEET, LOC_SHEET, LOANS_SHEET, WISHLIST_SHEET].filter(n => !existing.includes(n));
   if (toAdd.length) {
     const res = await s.spreadsheets.batchUpdate({
       spreadsheetId: SPREADSHEET_ID,
@@ -185,6 +200,10 @@ async function ensureSheets() {
   const loansRows = await sheetGet(LOANS_SHEET);
   if (!loansRows.length) {
     await sheetAppend(LOANS_SHEET, [['id', 'book_id', 'שם_שואל', 'טלפון', 'תאריך_השאלה']], 'A:E');
+  }
+  const wishlistRows = await sheetGet(WISHLIST_SHEET);
+  if (!wishlistRows.length) {
+    await sheetAppend(WISHLIST_SHEET, [['id', 'שם_ספר', 'שם_סופר', 'נקנה', 'סדרה', 'מספר_בסדרה']], 'A:F');
   }
 }
 
@@ -436,6 +455,51 @@ app.delete('/api/loans/:id', async (req, res) => {
     const idx      = rows.findIndex((r, i) => i > 0 && parseInt(r[0]) === targetId);
     if (idx === -1) return res.status(404).json({ error: 'לא נמצא' });
     await sheetDeleteRow(LOANS_SHEET, idx);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/wishlist
+app.get('/api/wishlist', async (req, res) => {
+  try {
+    const rows = await sheetGet(WISHLIST_SHEET);
+    res.json(parseWishlist(rows));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/wishlist
+app.post('/api/wishlist', async (req, res) => {
+  try {
+    const { name, author, series, seriesNumber } = req.body;
+    const rows   = await sheetGet(WISHLIST_SHEET);
+    const items  = parseWishlist(rows);
+    const nextId = (items.length ? Math.max(...items.map(i => i.id)) : 0) + 1;
+    await sheetAppend(WISHLIST_SHEET, [[nextId, name, author ?? '', '', series ?? '', seriesNumber ?? '']], 'A:F');
+    res.json({ id: nextId, name, author: author ?? '', bought: '', series: series ?? '', seriesNumber: seriesNumber ?? '' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PUT /api/wishlist/:id  — mark as bought
+app.put('/api/wishlist/:id', async (req, res) => {
+  try {
+    const targetId = parseInt(req.params.id);
+    const rows = await sheetGet(WISHLIST_SHEET);
+    const idx  = rows.findIndex((r, i) => i > 0 && parseInt(r[0]) === targetId);
+    if (idx === -1) return res.status(404).json({ error: 'לא נמצא' });
+    const row = rows[idx];
+    await sheetUpdate(WISHLIST_SHEET, idx + 1, [row[0], row[1], row[2], 'כן', row[4] ?? '', row[5] ?? '']);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/wishlist/:id
+app.delete('/api/wishlist/:id', async (req, res) => {
+  try {
+    const targetId = parseInt(req.params.id);
+    const rows = await sheetGet(WISHLIST_SHEET);
+    const idx  = rows.findIndex((r, i) => i > 0 && parseInt(r[0]) === targetId);
+    if (idx === -1) return res.status(404).json({ error: 'לא נמצא' });
+    await sheetDeleteRow(WISHLIST_SHEET, idx);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
