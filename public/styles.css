@@ -954,13 +954,18 @@ button, select, input[type="text"] { touch-action: manipulation; }
   font-size: .85rem;
   padding: 2px 4px;
   border-radius: 4px;
-  opacity: .35;
-  transition: opacity var(--t), transform var(--t);
+  opacity: .28;
+  filter: grayscale(1);
+  transition: opacity var(--t), transform var(--t), filter var(--t);
   line-height: 1;
   flex-shrink: 0;
 }
-.field-lock-btn:hover { opacity: .7; }
-.field-lock-btn.locked { opacity: 1; transform: scale(1.1); }
+.field-lock-btn:hover { opacity: .5; }
+.field-lock-btn.locked {
+  opacity: 1;
+  filter: grayscale(0) sepia(1) saturate(4) hue-rotate(340deg) brightness(.85);
+  transform: scale(1.15);
+}
 
 .form-group input[type="text"],
 .form-group input[type="number"],

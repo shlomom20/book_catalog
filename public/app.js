@@ -2422,12 +2422,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Management view action cards
   document.getElementById('mgmtAddBook').addEventListener('click', openAddBookModal);
 
-  document.getElementById('mgmtAddMultiple').addEventListener('click', () => {
-    openAddBookModal();
-    // Focus user on the "save and add" flow — show a brief hint toast
-    showToast('השתמש ב"שמור והוסף עוד" לאחר בחירת מיקום', '');
-  });
-
   document.getElementById('mgmtImportExcel').addEventListener('click', () => {
     openAddBookModal();
     switchBookModalTab('excel');
