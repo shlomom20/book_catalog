@@ -12,7 +12,10 @@
       "Bash(node --check server.js)",
       "Bash(grep \"innerHTML\\\\|template\\\\|html\\\\`\\\\|html =\")",
       "Bash(grep -n \"document.body.innerHTML\\\\|document.getElementById\\(''''app''''\\)\\\\|innerHTML = \\\\`\\\\|innerHTML=\\\\`\" public/app.js)",
-      "Bash(npm uninstall:*)"
+      "Bash(npm uninstall:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ]
   }
 }
