@@ -549,6 +549,39 @@ function renderSharedCard(books) {
 }
 
 
+// ---- Infinite scroll state ----
+let _infiniteBooks = [];
+let _infiniteRendered = 0;
+const INFINITE_PAGE = 50;
+let _infiniteObserver = null;
+
+function _renderMoreBooks() {
+  if (_infiniteRendered >= _infiniteBooks.length) return;
+  const container = document.getElementById('booksContainer');
+  const sentinel = document.getElementById('infiniteSentinel');
+  const loanedBookIds = new Set(db.loans.map(l => l.bookId));
+  const chunk = _infiniteBooks.slice(_infiniteRendered, _infiniteRendered + INFINITE_PAGE);
+  const html = chunk.map(book => {
+    const { crossMap, approvedMap, sameOwnerMap } = _infiniteMaps;
+    if (crossMap.has(book.id))     return renderSharedCard(crossMap.get(book.id));
+    if (approvedMap.has(book.id))  return renderSharedCard(approvedMap.get(book.id));
+    if (sameOwnerMap.has(book.id)) return renderDuplicateCard(sameOwnerMap.get(book.id));
+    return renderBookCard(book, loanedBookIds.has(book.id));
+  }).join('');
+  if (sentinel) {
+    sentinel.insertAdjacentHTML('beforebegin', html);
+  } else {
+    container.insertAdjacentHTML('beforeend', html);
+  }
+  _infiniteRendered += chunk.length;
+  if (_infiniteRendered >= _infiniteBooks.length && sentinel) {
+    sentinel.remove();
+    if (_infiniteObserver) { _infiniteObserver.disconnect(); _infiniteObserver = null; }
+  }
+}
+
+let _infiniteMaps = {};
+
 // ---- Books ----
 function renderBooks() {
   let books = sortBooks(getFilteredBooks());
@@ -565,6 +598,7 @@ function renderBooks() {
   if (books.length === 0) {
     container.innerHTML = '';
     empty.classList.remove('hidden');
+    if (_infiniteObserver) { _infiniteObserver.disconnect(); _infiniteObserver = null; }
     return;
   }
 
@@ -594,14 +628,31 @@ function renderBooks() {
 
   const secondaryIds = new Set([...crossSecondary, ...sameOwnerSecondary, ...approvedSecondary]);
   const displayBooks = books.filter(b => !secondaryIds.has(b.id));
-  const loanedBookIds = new Set(db.loans.map(l => l.bookId));
 
-  container.innerHTML = displayBooks.map(book => {
-    if (crossMap.has(book.id))     return renderSharedCard(crossMap.get(book.id));
-    if (approvedMap.has(book.id))  return renderSharedCard(approvedMap.get(book.id));
-    if (sameOwnerMap.has(book.id)) return renderDuplicateCard(sameOwnerMap.get(book.id));
-    return renderBookCard(book, loanedBookIds.has(book.id));
-  }).join('');
+  // Reset infinite scroll state
+  if (_infiniteObserver) { _infiniteObserver.disconnect(); _infiniteObserver = null; }
+  _infiniteBooks = displayBooks;
+  _infiniteRendered = 0;
+  _infiniteMaps = { crossMap, approvedMap, sameOwnerMap };
+  container.innerHTML = '';
+
+  // Add sentinel for infinite scroll
+  const sentinel = document.createElement('div');
+  sentinel.id = 'infiniteSentinel';
+  sentinel.style.height = '1px';
+  container.appendChild(sentinel);
+
+  // Render first page immediately
+  _renderMoreBooks();
+
+  // Set up IntersectionObserver for subsequent pages
+  if (_infiniteRendered < _infiniteBooks.length) {
+    _infiniteObserver = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting) _renderMoreBooks();
+    }, { rootMargin: '200px' });
+    const newSentinel = document.getElementById('infiniteSentinel');
+    if (newSentinel) _infiniteObserver.observe(newSentinel);
+  }
 }
 
 function renderBookCard(book, isLoaned = false) {
@@ -1794,11 +1845,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const searchInput = document.getElementById('searchInput');
   const searchClear = document.getElementById('searchClear');
 
+  let _searchDebounce = null;
   searchInput.addEventListener('input', () => {
-    state.search = searchInput.value;
-    searchClear.classList.toggle('visible', state.search.length > 0);
-    render();
-    window.scrollTo(0, 0);
+    searchClear.classList.toggle('visible', searchInput.value.length > 0);
+    clearTimeout(_searchDebounce);
+    _searchDebounce = setTimeout(() => {
+      state.search = searchInput.value;
+      render();
+      window.scrollTo(0, 0);
+    }, 300);
   });
 
   searchClear.addEventListener('click', () => {

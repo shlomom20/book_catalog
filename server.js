@@ -52,6 +52,18 @@ async function getSheetId(name) {
   return _sheetIds[name];
 }
 
+// ============================================================
+// In-memory cache for /api/data
+// ============================================================
+let _dataCache = null;
+let _dataCacheTs = 0;
+const DATA_CACHE_TTL = 60 * 1000; // 60 seconds
+
+function invalidateDataCache() {
+  _dataCache = null;
+  _dataCacheTs = 0;
+}
+
 // ---- Low-level helpers ----
 
 async function sheetGet(sheetName) {
@@ -217,8 +229,13 @@ async function ensureSheets() {
 // GET /api/data  – all books + locations
 app.get('/api/data', async (req, res) => {
   try {
+    if (_dataCache && (Date.now() - _dataCacheTs) < DATA_CACHE_TTL) {
+      return res.json(_dataCache);
+    }
     const [booksRows, locRows] = await Promise.all([sheetGet(BOOKS_SHEET), sheetGet(LOC_SHEET)]);
-    res.json({ books: parseBooks(booksRows), locations: parseLocations(locRows) });
+    _dataCache = { books: parseBooks(booksRows), locations: parseLocations(locRows) };
+    _dataCacheTs = Date.now();
+    res.json(_dataCache);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -229,6 +246,7 @@ app.post('/api/books', async (req, res) => {
     const rows   = await sheetGet(BOOKS_SHEET);
     const nextId = maxId(parseBooks(rows)) + 1;
     await sheetAppend(BOOKS_SHEET, [[nextId, name, author, cabinetId ?? '', shelfId ?? '', rowId ?? '', layerId ?? '', notes ?? '', series ?? '', seriesNumber ?? '', '']], 'A:K');
+    invalidateDataCache();
     res.json({ id: nextId, name, author, cabinetId, shelfId, rowId, layerId, notes: notes ?? '', series: series ?? '', seriesNumber: seriesNumber ?? '', approvedDuplicate: false });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -243,6 +261,7 @@ app.put('/api/books/:id', async (req, res) => {
     const { name, author, cabinetId, shelfId, rowId, layerId, notes, series, seriesNumber } = req.body;
     const existingApproved = (rows[idx][10] === 'TRUE') ? 'TRUE' : '';
     await sheetUpdate(BOOKS_SHEET, idx + 1, [targetId, name, author, cabinetId ?? '', shelfId ?? '', rowId ?? '', layerId ?? '', notes ?? '', series ?? '', seriesNumber ?? '', existingApproved]);
+    invalidateDataCache();
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -255,6 +274,7 @@ app.delete('/api/books/:id', async (req, res) => {
     const idx      = rows.findIndex((r, i) => i > 0 && parseInt(r[0]) === targetId);
     if (idx === -1) return res.status(404).json({ error: 'לא נמצא' });
     await sheetDeleteRow(BOOKS_SHEET, idx);
+    invalidateDataCache();
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -273,6 +293,7 @@ app.patch('/api/books/approve-duplicate', async (req, res) => {
         r[7] ?? '', r[8] ?? '', r[9] ?? '', 'TRUE',
       ]);
     }
+    invalidateDataCache();
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -340,6 +361,7 @@ app.post('/api/books/bulk', async (req, res) => {
     if (newLocRows.length)  await sheetAppend(LOC_SHEET,   newLocRows,  'A:F');
     if (newBookRows.length) await sheetAppend(BOOKS_SHEET, newBookRows, 'A:J');
 
+    invalidateDataCache();
     res.json({ books: newBooks, locations: locs });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -353,6 +375,7 @@ app.post('/api/locations', async (req, res) => {
     const nextId = maxId([...locs.cabinets, ...locs.shelves, ...locs.rows, ...locs.layers]) + 1;
     const extra  = (type === 'ארון' && owner) ? owner : '';
     await sheetAppend(LOC_SHEET, [[type, nextId, name, parentId ?? '', extra]], 'A:F');
+    invalidateDataCache();
     res.json({ id: nextId, name, parentId, owner: extra });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -373,6 +396,7 @@ app.put('/api/locations/:id', async (req, res) => {
       owner !== undefined ? owner : (row[4] ?? ''),
       row[5] ?? '',
     ]);
+    invalidateDataCache();
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -389,6 +413,7 @@ app.delete('/api/locations/:id', async (req, res) => {
 
     if (!cascade) {
       await sheetDeleteRow(LOC_SHEET, locIdx);
+      invalidateDataCache();
       return res.json({ ok: true });
     }
 
@@ -445,6 +470,7 @@ app.delete('/api/locations/:id', async (req, res) => {
       await sheetDeleteRow(LOC_SHEET, idx);
     }
 
+    invalidateDataCache();
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
