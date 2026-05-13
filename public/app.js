@@ -812,21 +812,19 @@ function switchBookModalTab(tab) {
     t.classList.toggle('active', t.dataset.tab === tab));
   document.getElementById('tabManual').classList.toggle('active', tab === 'manual');
   document.getElementById('tabExcel').classList.toggle('active',  tab === 'excel');
+  document.getElementById('tabCamera').classList.toggle('active', tab === 'camera');
 
-  const saveBtn      = document.getElementById('bookModalSave');
-  const saveAddBtn   = document.getElementById('bookModalSaveAndAdd');
-  const importBtn    = document.getElementById('importModalConfirm');
-  const isAddMode    = !state.editingBookId;
-  if (tab === 'manual') {
-    saveBtn.style.display    = '';
-    saveAddBtn.style.display = isAddMode ? '' : 'none';
-    importBtn.style.display  = 'none';
-  } else {
-    saveBtn.style.display    = 'none';
-    saveAddBtn.style.display = 'none';
-    // Import button is shown only after a file is loaded — handled in showImportResult
-    importBtn.style.display  = 'none';
-  }
+  const saveBtn       = document.getElementById('bookModalSave');
+  const saveAddBtn    = document.getElementById('bookModalSaveAndAdd');
+  const importBtn     = document.getElementById('importModalConfirm');
+  const cameraImport  = document.getElementById('cameraImportConfirm');
+  const isAddMode     = !state.editingBookId;
+
+  saveBtn.style.display      = tab === 'manual' ? '' : 'none';
+  saveAddBtn.style.display   = (tab === 'manual' && isAddMode) ? '' : 'none';
+  importBtn.style.display    = 'none';
+  cameraImport.style.display = 'none';
+  // cameraImportConfirm is shown only after recognition — handled in showCameraResults
 }
 
 // ---- Multi-author helpers ----
@@ -881,6 +879,7 @@ function openAddBookModal() {
   document.getElementById('bookModalTabs').style.display = '';
   resetBookForm();
   resetExcelTab();
+  resetCameraTab();
   switchBookModalTab('manual');
   openModal('bookModal');
   document.getElementById('bookName').focus();
@@ -941,6 +940,251 @@ function resetBookForm() {
   hideNewRow('newShelfRow');
   hideNewRow('newRowRow');
   hideNewRow('newLayerRow');
+}
+
+// ============================================================
+// Camera Tab — פונקציות
+// ============================================================
+
+let _cameraImageBase64 = null;
+let _cameraImageMime   = null;
+let _recognizedBooks   = [];  // התוצאות האחרונות מהשרת
+
+function resetCameraTab() {
+  _cameraImageBase64 = null;
+  _cameraImageMime   = null;
+  _recognizedBooks   = [];
+  document.getElementById('cameraDropZone').classList.remove('hidden');
+  document.getElementById('cameraPreview').classList.add('hidden');
+  document.getElementById('cameraLoading').classList.add('hidden');
+  document.getElementById('cameraResults').classList.add('hidden');
+  document.getElementById('cameraImportConfirm').style.display = 'none';
+  document.getElementById('recognizedBooksList').innerHTML = '';
+  document.getElementById('imageFileInput').value  = '';
+  document.getElementById('cameraInput').value     = '';
+}
+
+function handleImageFile(file) {
+  if (!file.type.startsWith('image/')) {
+    showToast('נא לבחור קובץ תמונה', 'error');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const dataUrl = e.target.result;
+    // dataUrl = "data:image/jpeg;base64,XXXX"
+    const [header, base64] = dataUrl.split(',');
+    _cameraImageMime   = header.match(/:(.*?);/)[1];
+    _cameraImageBase64 = base64;
+
+    document.getElementById('cameraPreviewImg').src = dataUrl;
+    document.getElementById('cameraDropZone').classList.add('hidden');
+    document.getElementById('cameraPreview').classList.remove('hidden');
+    document.getElementById('cameraLoading').classList.add('hidden');
+    document.getElementById('cameraResults').classList.add('hidden');
+    document.getElementById('cameraImportConfirm').style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+
+async function recognizeBooks() {
+  if (!_cameraImageBase64) return;
+
+  document.getElementById('cameraPreview').classList.add('hidden');
+  document.getElementById('cameraResults').classList.add('hidden');
+  document.getElementById('cameraImportConfirm').style.display = 'none';
+  document.getElementById('cameraLoading').classList.remove('hidden');
+  document.getElementById('cameraLoadingText').textContent = 'מזהה ספרים מהתמונה...';
+
+  try {
+    const data = await apiFetch('POST', '/api/books/recognize-from-image', {
+      imageBase64: _cameraImageBase64,
+      mimeType:    _cameraImageMime,
+    });
+    _recognizedBooks = data;
+    showCameraResults(data);
+  } catch (e) {
+    document.getElementById('cameraLoading').classList.add('hidden');
+    document.getElementById('cameraPreview').classList.remove('hidden');
+    showToast('שגיאה בזיהוי: ' + e.message, 'error');
+  }
+}
+
+function showCameraResults(books) {
+  document.getElementById('cameraLoading').classList.add('hidden');
+  document.getElementById('cameraResults').classList.remove('hidden');
+
+  const count = books.length;
+  document.getElementById('cameraResultsCount').textContent =
+    count ? `זוהו ${count} ספרים — סמן את הספרים שברצונך להוסיף:` : 'לא זוהו ספרים בתמונה';
+
+  // מלא את בורר המיקום
+  populateCamCabinetSelect(null);
+
+  const list = document.getElementById('recognizedBooksList');
+  if (!count) {
+    list.innerHTML = '<p class="camera-no-books">נסה לצלם תמונה ברורה יותר עם הספרים קרובים יותר</p>';
+    return;
+  }
+
+  list.innerHTML = books.map((b, i) => {
+    const verifiedBadge = b.verified
+      ? '<span class="verified-badge">✅ אומת</span>'
+      : b.notFound
+        ? '<span class="not-found-badge">❌ לא נמצא בGoogle Books — בדוק ידנית</span>'
+        : '<span class="unverified-badge">⚠️ לא אומת</span>';
+    // ספרים שלא נמצאו בGoogle Books — כנראה הזיה, מבטלים אוטומטית
+    const defaultChecked = !b.notFound;
+
+    const suggestionsHtml = (!b.verified && b.suggestions && b.suggestions.length) ? `
+      <div class="book-suggestions">
+        <span class="suggestions-label">אולי התכוונת ל:</span>
+        ${b.suggestions.map((s, si) =>
+          `<button type="button" class="btn-suggestion" data-idx="${i}" data-si="${si}">${esc(s.name)}${s.author ? ' / ' + esc(s.author) : ''}</button>`
+        ).join('')}
+      </div>` : '';
+
+    return `
+      <div class="recognized-book-item" id="recBook_${i}">
+        <div class="rec-book-header">
+          <label class="rec-book-checkbox-wrap">
+            <input type="checkbox" class="rec-book-check" data-idx="${i}" ${defaultChecked ? 'checked' : ''}>
+          </label>
+          <div class="rec-book-status">${verifiedBadge}</div>
+        </div>
+        <div class="rec-book-fields">
+          <div class="form-group">
+            <label>שם הספר</label>
+            <input type="text" class="rec-book-name" data-idx="${i}" value="${esc(b.name)}" placeholder="שם הספר">
+          </div>
+          <div class="form-group">
+            <label>מחבר</label>
+            <input type="text" class="rec-book-author" data-idx="${i}" value="${esc(b.author)}" placeholder="שם המחבר">
+          </div>
+          <div class="form-group">
+            <label>סדרה</label>
+            <input type="text" class="rec-book-series" data-idx="${i}" value="${esc(b.series || '')}" placeholder="סדרה (אופציונלי)">
+          </div>
+          <div class="form-group form-group-narrow">
+            <label># בסדרה</label>
+            <input type="text" class="rec-book-snum" data-idx="${i}" value="${esc(b.seriesNumber || '')}" placeholder="מס'">
+          </div>
+        </div>
+        ${suggestionsHtml}
+      </div>`;
+  }).join('');
+
+  // כפתורי הצעות
+  list.querySelectorAll('.btn-suggestion').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.idx);
+      const si  = parseInt(btn.dataset.si);
+      const sug = _recognizedBooks[idx].suggestions[si];
+      document.querySelector(`.rec-book-name[data-idx="${idx}"]`).value   = sug.name   || '';
+      document.querySelector(`.rec-book-author[data-idx="${idx}"]`).value = sug.author || '';
+      document.querySelector(`.rec-book-series[data-idx="${idx}"]`).value = sug.series || '';
+      document.querySelector(`.rec-book-snum[data-idx="${idx}"]`).value   = sug.seriesNumber || '';
+      // סמן כ"אומת" ויזואלית
+      const item = document.getElementById(`recBook_${idx}`);
+      item.querySelector('.unverified-badge').outerHTML = '<span class="verified-badge">✅ אומת</span>';
+      item.querySelector('.book-suggestions').remove();
+    });
+  });
+
+  document.getElementById('cameraImportConfirm').style.display = '';
+}
+
+async function importRecognizedBooks() {
+  const checkboxes = document.querySelectorAll('.rec-book-check');
+  const location = getCamLocation();
+
+  const toAdd = [];
+  checkboxes.forEach(cb => {
+    if (!cb.checked) return;
+    const i = parseInt(cb.dataset.idx);
+    const name   = document.querySelector(`.rec-book-name[data-idx="${i}"]`).value.trim();
+    const author = document.querySelector(`.rec-book-author[data-idx="${i}"]`).value.trim();
+    if (!name || !author) return;
+    toAdd.push({
+      name,
+      author,
+      series:       document.querySelector(`.rec-book-series[data-idx="${i}"]`).value.trim(),
+      seriesNumber: document.querySelector(`.rec-book-snum[data-idx="${i}"]`).value.trim(),
+      ...location,
+    });
+  });
+
+  if (!toAdd.length) {
+    showToast('לא נבחרו ספרים להוספה', 'error');
+    return;
+  }
+
+  // בדוק שיש שם ומחבר לכל ספר מסומן
+  const missing = toAdd.filter(b => !b.name || !b.author);
+  if (missing.length) {
+    showToast('נא למלא שם ומחבר לכל הספרים המסומנים', 'error');
+    return;
+  }
+
+  showLoadingOverlay(true);
+  try {
+    let added = 0;
+    for (const book of toAdd) {
+      const newBook = await apiFetch('POST', '/api/books', book);
+      db.books.push(newBook);
+      added++;
+    }
+    render();
+    closeModal('bookModal');
+    showToast(`${added} ספרים נוספו בהצלחה ✓`, 'success');
+  } catch (e) {
+    showToast('שגיאה: ' + e.message, 'error');
+  } finally {
+    showLoadingOverlay(false);
+  }
+}
+
+// בוררי מיקום לטאב מצלמה
+function populateCamCabinetSelect(selectedId) {
+  const sel = document.getElementById('camCabinetSelect');
+  sel.innerHTML = '<option value="">-- ללא מיקום --</option>' +
+    db.locations.cabinets.map(c => `<option value="${c.id}"${c.id === selectedId ? ' selected' : ''}>${esc(c.name)}</option>`).join('');
+  populateCamShelfSelect(selectedId, null);
+}
+
+function populateCamShelfSelect(cabinetId, selectedId) {
+  const sel = document.getElementById('camShelfSelect');
+  const shelves = cabinetId ? db.locations.shelves.filter(s => s.cabinetId === cabinetId) : [];
+  sel.innerHTML = '<option value="">-- בחר מדף --</option>' +
+    shelves.map(s => `<option value="${s.id}"${s.id === selectedId ? ' selected' : ''}>${esc(s.name)}</option>`).join('');
+  sel.disabled = !shelves.length;
+  populateCamRowSelect(null, null);
+}
+
+function populateCamRowSelect(shelfId, selectedId) {
+  const sel = document.getElementById('camRowSelect');
+  const rows = shelfId ? db.locations.rows.filter(r => r.shelfId === shelfId) : [];
+  sel.innerHTML = '<option value="">-- בחר טור --</option>' +
+    rows.map(r => `<option value="${r.id}"${r.id === selectedId ? ' selected' : ''}>${esc(r.name)}</option>`).join('');
+  sel.disabled = !rows.length;
+  populateCamLayerSelect(null, null);
+}
+
+function populateCamLayerSelect(rowId, selectedId) {
+  const sel = document.getElementById('camLayerSelect');
+  const layers = rowId ? db.locations.layers.filter(l => l.rowId === rowId) : [];
+  sel.innerHTML = '<option value="">-- בחר שכבה --</option>' +
+    layers.map(l => `<option value="${l.id}"${l.id === selectedId ? ' selected' : ''}>${esc(l.name)}</option>`).join('');
+  sel.disabled = !layers.length;
+}
+
+function getCamLocation() {
+  return {
+    cabinetId: parseInt(document.getElementById('camCabinetSelect').value) || null,
+    shelfId:   parseInt(document.getElementById('camShelfSelect').value)   || null,
+    rowId:     parseInt(document.getElementById('camRowSelect').value)     || null,
+    layerId:   parseInt(document.getElementById('camLayerSelect').value)   || null,
+  };
 }
 
 function resetExcelTab() {
@@ -2752,6 +2996,68 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!tab) return;
     switchBookModalTab(tab.dataset.tab);
     if (tab.dataset.tab === 'manual') document.getElementById('bookName').focus();
+  });
+
+  // ============================================================
+  // ---- Camera Tab ----
+  // ============================================================
+
+  // בחר תמונה מהגלריה
+  document.getElementById('pickImageBtn').addEventListener('click', () => {
+    document.getElementById('imageFileInput').value = '';
+    document.getElementById('imageFileInput').click();
+  });
+
+  // צלם תמונה (מובייל)
+  document.getElementById('takePictureBtn').addEventListener('click', () => {
+    document.getElementById('cameraInput').value = '';
+    document.getElementById('cameraInput').click();
+  });
+
+  // לחיצה על אזור ה-drop zone
+  document.getElementById('cameraDropZone').addEventListener('click', e => {
+    if (e.target.closest('button')) return;
+    document.getElementById('imageFileInput').click();
+  });
+
+  // גרירת תמונה
+  const camDropZone = document.getElementById('cameraDropZone');
+  camDropZone.addEventListener('dragover',  e => { e.preventDefault(); camDropZone.classList.add('drag-over'); });
+  camDropZone.addEventListener('dragleave', () => camDropZone.classList.remove('drag-over'));
+  camDropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    camDropZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) handleImageFile(file);
+  });
+
+  document.getElementById('imageFileInput').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (file) handleImageFile(file);
+  });
+
+  document.getElementById('cameraInput').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (file) handleImageFile(file);
+  });
+
+  document.getElementById('changeImageBtn').addEventListener('click', resetCameraTab);
+  document.getElementById('rescanBtn').addEventListener('click', resetCameraTab);
+  document.getElementById('recognizeBooksBtn').addEventListener('click', recognizeBooks);
+  document.getElementById('cameraImportConfirm').addEventListener('click', importRecognizedBooks);
+
+  // בורר מיקום לטאב מצלמה
+  document.getElementById('camCabinetSelect').addEventListener('change', () => {
+    const cabId = parseInt(document.getElementById('camCabinetSelect').value) || null;
+    populateCamShelfSelect(cabId, null);
+  });
+  document.getElementById('camShelfSelect').addEventListener('change', () => {
+    const shelfId = parseInt(document.getElementById('camShelfSelect').value) || null;
+    populateCamRowSelect(shelfId, null);
+  });
+  document.getElementById('camRowSelect').addEventListener('change', () => {
+    const rowId = parseInt(document.getElementById('camRowSelect').value) || null;
+    populateCamLayerSelect(rowId, null);
   });
 
   // ---- Excel Tab ----

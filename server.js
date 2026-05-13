@@ -7,6 +7,8 @@ require('dotenv').config();
 const express    = require('express');
 const { google } = require('googleapis');
 const path       = require('path');
+const https      = require('https');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -550,6 +552,156 @@ app.delete('/api/wishlist/:id', async (req, res) => {
     await sheetDeleteRow(WISHLIST_SHEET, idx);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ============================================================
+// POST /api/books/recognize-from-image
+// קבלת תמונה (base64), זיהוי ספרים עם Gemini, אימות עם Google Books
+// ============================================================
+app.post('/api/books/recognize-from-image', async (req, res) => {
+  try {
+    const { imageBase64, mimeType } = req.body;
+    if (!imageBase64) return res.status(400).json({ error: 'חסרה תמונה' });
+
+    // ---- שלב 1: Gemini מזהה שמות וסופרים מהתמונה ----
+    if (!process.env.GOOGLE_AI_API_KEY) return res.status(500).json({ error: 'GOOGLE_AI_API_KEY לא מוגדר' });
+    const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+    const prompt = `Look at this bookshelf image. Your task is OCR only — read text that is physically printed on the book spines.
+
+STRICT RULES:
+1. Only include books where you can clearly read the title in the image
+2. For author: only include if the author's name is visibly printed on the spine — otherwise return empty string ""
+3. Do NOT guess, infer, or use prior knowledge to fill in missing information
+4. Do NOT hallucinate books that are blurry, hidden, or unclear
+5. If a spine is partially visible and you cannot read the full title, skip it
+
+Return ONLY a JSON array, no explanation:
+[{"name":"exact text from spine","author":"exact text from spine or empty string"},...]
+
+If no books are clearly readable, return: []`;
+
+    const result = await model.generateContent([
+      prompt,
+      { inlineData: { data: imageBase64, mimeType: mimeType || 'image/jpeg' } },
+    ]);
+
+    let rawBooks = [];
+    try {
+      const text = result.response.text().trim()
+        .replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '');
+      rawBooks = JSON.parse(text);
+    } catch {
+      return res.status(500).json({ error: 'Gemini לא החזיר JSON תקין' });
+    }
+
+    if (!rawBooks.length) return res.json([]);
+
+    // ---- שלב 2: Google Books מאמת ומשלים כל ספר ----
+    const BOOKS_KEY = process.env.GOOGLE_BOOKS_API_KEY || '';
+
+    async function searchGoogleBooks(query) {
+      return new Promise((resolve) => {
+        const encoded = encodeURIComponent(query);
+        const url = `https://www.googleapis.com/books/v1/volumes?q=${encoded}&maxResults=5${BOOKS_KEY ? `&key=${BOOKS_KEY}` : ''}`;
+        https.get(url, (r) => {
+          let data = '';
+          r.on('data', c => data += c);
+          r.on('end', () => {
+            try { resolve(JSON.parse(data)); }
+            catch { resolve(null); }
+          });
+        }).on('error', () => resolve(null));
+      });
+    }
+
+    function extractBookInfo(volume) {
+      const info = volume?.volumeInfo || {};
+      // Google Books מחזיר authors כמערך — מאחד לסטרינג
+      const author = (info.authors && info.authors.length) ? info.authors.join(', ') : '';
+      return {
+        name:         info.title || '',
+        author,
+        series:       '',
+        seriesNumber: '',
+      };
+    }
+
+    // מחפש לפי שם + מחבר, ואם לא נמצא — לפי שם בלבד, ואם לא — לפי מחבר
+    async function findBook(raw) {
+      // ניסיון א': שם + מחבר
+      if (raw.name && raw.author) {
+        const res1 = await searchGoogleBooks(`intitle:${raw.name} inauthor:${raw.author}`);
+        const items1 = res1?.items || [];
+        if (items1.length) {
+          const info = extractBookInfo(items1[0]);
+          // אם Google Books לא מצא מחבר — שמור את מה ש-Gemini קרא
+          if (!info.author) info.author = raw.author;
+          return { ...info, verified: true, suggestions: [] };
+        }
+      }
+
+      // ניסיון ב': שם בלבד (חיפוש מדויק יותר עם intitle)
+      if (raw.name) {
+        const res2 = await searchGoogleBooks(`intitle:${raw.name}`);
+        const items2 = res2?.items || [];
+        if (items2.length) {
+          const info = extractBookInfo(items2[0]);
+          // אם Google Books לא מצא מחבר — שמור את מה ש-Gemini קרא
+          if (!info.author && raw.author) info.author = raw.author;
+          return { ...info, verified: true, suggestions: [] };
+        }
+      }
+
+      // ניסיון ג': מחבר בלבד — הצעות לבחירה
+      if (raw.author) {
+        const res3 = await searchGoogleBooks(`inauthor:${raw.author}`);
+        const items3 = res3?.items || [];
+        if (items3.length) {
+          return {
+            name:         raw.name,
+            author:       raw.author,
+            series:       '',
+            seriesNumber: '',
+            verified:     false,
+            notFound:     false,
+            suggestions:  items3.slice(0, 4).map(extractBookInfo),
+          };
+        }
+      }
+
+      // לא נמצא כלום — כנראה הומצא על ידי Gemini
+      return {
+        name:         raw.name,
+        author:       raw.author,
+        series:       '',
+        seriesNumber: '',
+        verified:     false,
+        notFound:     true,   // דגל: Google Books לא מצא — כנראה הזיה
+        suggestions:  [],
+      };
+    }
+
+    // מריץ את כל החיפושים במקביל
+    const books = await Promise.all(rawBooks.map(findBook));
+    res.json(books);
+
+  } catch (e) {
+    console.error('recognize-from-image error:', e);
+    // חלץ הודעה קצרה וקריאה מתוך שגיאות Gemini
+    let msg = e.message || 'שגיאה לא ידועה';
+    if (msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota') || msg.includes('FreeTier')) {
+      msg = 'חרגת ממגבלת הבקשות החינמיות של Gemini (15 בקשות לדקה). המתן מספר שניות ונסה שוב.';
+    } else if (msg.includes('API_KEY') || msg.includes('API key')) {
+      msg = 'GOOGLE_AI_API_KEY שגוי או לא תקף.';
+    } else if (msg.includes('not found') || msg.includes('not supported')) {
+      msg = `הדגם "${msg.match(/models\/[\w.-]+/)?.[0] || 'gemini'}" אינו זמין. פנה למפתח.`;
+    } else if (msg.length > 200) {
+      msg = msg.substring(0, 200) + '...';
+    }
+    res.status(500).json({ error: msg });
+  }
 });
 
 // ---- Fallback: serve index.html for any non-API route ----

@@ -1965,3 +1965,182 @@ button, select, input[type="text"] { touch-action: manipulation; }
 /* nav-wishlist-action in mobile wishlist tab only */
 .nav-wishlist-action { display: none !important; }
 body.tab-wishlist .nav-wishlist-action { display: inline-flex !important; }
+
+/* ============================================================
+   Camera Tab — זיהוי ספרים מתמונה
+   ============================================================ */
+
+/* תצוגה מקדימה של תמונה */
+.camera-preview-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.camera-preview-wrap img {
+  max-width: 100%;
+  max-height: 220px;
+  border-radius: var(--r-md);
+  border: 2px solid var(--color-border);
+  object-fit: contain;
+}
+.btn-recognize {
+  width: 100%;
+  padding: 14px;
+  font-size: 1.05rem;
+}
+
+/* מסך טעינה */
+.camera-loading-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 40px 0;
+  color: var(--color-text-lt);
+}
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* תוצאות */
+.camera-results-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.camera-location-section {
+  background: var(--bg-hover);
+  border-radius: var(--r-md);
+  padding: 12px;
+  margin-bottom: 16px;
+  border: 1.5px solid var(--color-border);
+}
+.camera-no-books {
+  text-align: center;
+  color: var(--color-muted);
+  padding: 20px 0;
+}
+
+/* פריט ספר מזוהה */
+.recognized-book-item {
+  background: var(--bg-surface);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--r-md);
+  padding: 12px;
+  margin-bottom: 10px;
+  transition: var(--t);
+}
+.recognized-book-item:has(.rec-book-check:not(:checked)) {
+  opacity: 0.5;
+}
+.rec-book-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.rec-book-checkbox-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.rec-book-checkbox-wrap input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--color-primary);
+}
+.rec-book-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+@media (max-width: 480px) {
+  .rec-book-fields { grid-template-columns: 1fr; }
+}
+.rec-book-fields .form-group { margin: 0; }
+.rec-book-fields label {
+  font-size: 0.78rem;
+  color: var(--color-muted);
+  margin-bottom: 3px;
+  display: block;
+}
+.rec-book-fields input {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--r-sm);
+  font-size: 0.9rem;
+  font-family: inherit;
+  background: var(--bg-main);
+  color: var(--color-text);
+  outline: none;
+  transition: var(--t);
+}
+.rec-book-fields input:focus {
+  border-color: var(--color-primary);
+  background: var(--bg-surface);
+}
+
+/* תגיות אימות */
+.verified-badge, .unverified-badge {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-weight: 600;
+}
+.verified-badge   { background: #E8F5E9; color: #2E7D32; }
+.unverified-badge { background: #FFF8E1; color: #F57F17; }
+
+/* הצעות */
+.book-suggestions {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border-lt);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.suggestions-label {
+  font-size: 0.78rem;
+  color: var(--color-muted);
+  width: 100%;
+}
+.btn-suggestion {
+  background: var(--bg-hover);
+  border: 1.5px solid var(--color-border);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  color: var(--color-primary);
+  font-family: inherit;
+  transition: var(--t);
+}
+.btn-suggestion:hover {
+  background: var(--color-accent-lt);
+  border-color: var(--color-accent);
+}
+
+.not-found-badge {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-weight: 600;
+  background: #FFEBEE;
+  color: #C62828;
+}

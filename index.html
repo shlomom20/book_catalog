@@ -197,6 +197,7 @@
       <div class="modal-tabs" id="bookModalTabs">
         <button class="modal-tab active" data-tab="manual">✍️ הוספה ידנית</button>
         <button class="modal-tab" data-tab="excel">📥 ייבוא מ-Excel</button>
+        <button class="modal-tab" data-tab="camera">📷 זיהוי מתמונה</button>
       </div>
 
       <div class="modal-body">
@@ -282,6 +283,76 @@
           </form>
         </div>
 
+        <!-- ── Camera Tab ── -->
+        <div id="tabCamera" class="modal-tab-panel">
+
+          <!-- אזור העלאת תמונה -->
+          <div id="cameraDropZone" class="drop-zone">
+            <div class="drop-zone-icon">📷</div>
+            <p class="drop-zone-text">גרור תמונה לכאן</p>
+            <p class="drop-zone-or">— או —</p>
+            <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+              <button type="button" class="btn-primary" id="pickImageBtn">בחר תמונה</button>
+              <button type="button" class="btn-secondary" id="takePictureBtn">📸 צלם</button>
+            </div>
+            <input type="file" id="imageFileInput" accept="image/*" style="display:none">
+            <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none">
+            <p class="drop-zone-hint">תמונה של מדף ספרים — JPG, PNG, WEBP</p>
+          </div>
+
+          <!-- תצוגה מקדימה + כפתור זיהוי -->
+          <div id="cameraPreview" class="hidden">
+            <div class="camera-preview-wrap">
+              <img id="cameraPreviewImg" src="" alt="תצוגה מקדימה">
+              <button type="button" class="btn-link" id="changeImageBtn">🔄 בחר תמונה אחרת</button>
+            </div>
+            <button type="button" class="btn-primary btn-recognize" id="recognizeBooksBtn">🔍 זהה ספרים</button>
+          </div>
+
+          <!-- טוען -->
+          <div id="cameraLoading" class="hidden">
+            <div class="camera-loading-wrap">
+              <div class="spinner"></div>
+              <p id="cameraLoadingText">מזהה ספרים מהתמונה...</p>
+            </div>
+          </div>
+
+          <!-- תוצאות -->
+          <div id="cameraResults" class="hidden">
+            <div class="camera-results-header">
+              <span id="cameraResultsCount"></span>
+              <button type="button" class="btn-link" id="rescanBtn">🔄 סרוק מחדש</button>
+            </div>
+
+            <!-- מיקום משותף לכל הספרים -->
+            <div class="camera-location-section">
+              <div class="form-section-title">📍 מיקום לכל הספרים</div>
+              <div class="form-row location-row">
+                <div class="form-group">
+                  <label for="camCabinetSelect">ארון</label>
+                  <select id="camCabinetSelect"><option value="">-- בחר ארון --</option></select>
+                </div>
+                <div class="form-group">
+                  <label for="camShelfSelect">מדף</label>
+                  <select id="camShelfSelect" disabled><option value="">-- בחר מדף --</option></select>
+                </div>
+                <div class="form-group">
+                  <label for="camRowSelect">טור</label>
+                  <select id="camRowSelect" disabled><option value="">-- בחר טור --</option></select>
+                </div>
+                <div class="form-group">
+                  <label for="camLayerSelect">שכבה</label>
+                  <select id="camLayerSelect" disabled><option value="">-- בחר שכבה --</option></select>
+                </div>
+              </div>
+            </div>
+
+            <!-- רשימת הספרים המזוהים -->
+            <div id="recognizedBooksList"></div>
+          </div>
+
+        </div>
+
         <!-- ── Excel Tab ── -->
         <div id="tabExcel" class="modal-tab-panel">
 
@@ -314,6 +385,7 @@
         <button class="btn-primary" id="bookModalSave">💾 שמור ספר</button>
         <button class="btn-primary" id="bookModalSaveAndAdd" style="display:none">💾 שמור והוסף עוד</button>
         <button class="btn-primary" id="importModalConfirm" style="display:none">📥 ייבא ספרים</button>
+        <button class="btn-primary" id="cameraImportConfirm" style="display:none">📚 הוסף ספרים מסומנים</button>
       </div>
     </div>
   </div>
